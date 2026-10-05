@@ -1,0 +1,49 @@
+# OPTIONAL local MySQL, for a teammate whose Docker works and who wants to run
+# against the real database engine rather than the "h2" profile.
+#
+# Nothing in the project depends on this file: the test suite and the documented
+# local run both use H2 in MySQL mode and need no container. It has also NOT been
+# run on the machine this project was built on, where Docker Desktop is broken -
+# it mirrors the compose file from the employee-manager project, which was.
+#
+#   docker compose up -d --wait   start the database
+#   docker compose down           stop it, keeping the data
+#   docker compose down -v        stop it and wipe the data (Flyway reseeds on next boot)
+#
+# The credentials here are local-development only: they configure this throwaway
+# container, nothing else. The application does not read them - it has no default
+# password at all, so run it with DB_PASSWORD=cloudshop_app_pw to match
+# MYSQL_PASSWORD below. Cloud deployments supply their own values and never use these.
+
+services:
+  mysql:
+    # 8.0.16 or newer is required: earlier versions parse CHECK constraints and
+    # then ignore them, which would silently drop the stock >= 0 backstop.
+    image: mysql:8.0
+    container_name: cloudshop-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pw
+      MYSQL_DATABASE: cloudshopdb
+      MYSQL_USER: cloudshop_app
+      MYSQL_PASSWORD: cloudshop_app_pw
+    ports:
+      # Bound to 127.0.0.1 deliberately. A bare "3306:3306" publishes on 0.0.0.0,
+      # which would expose MySQL - with the root password that is committed a few
+      # lines above - to the network on any host with a routable IP, a cloud VM
+      # included. This container is for local development only and never needs to
+      # be reachable from off the machine. Change the host port if 3306 is taken.
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # Lets `docker compose up --wait` block until MySQL actually accepts connections,
+      # which takes noticeably longer than the container taking a few seconds to start.
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_pw"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mysql-data:

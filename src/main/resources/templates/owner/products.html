@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Inventory')}"></head>
+<body class="bg-body-tertiary">
+
+<nav th:replace="~{fragments/layout :: navbar('inventory')}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">Inventory</h1>
+        <a class="btn btn-primary" th:href="@{/owner/products/new}">Add Product</a>
+    </div>
+
+    <div th:if="${products.isEmpty()}" class="alert alert-info">
+        No products yet. <a th:href="@{/owner/products/new}" class="alert-link">Add the first one.</a>
+    </div>
+
+    <div th:unless="${products.isEmpty()}" class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col" class="text-end">Price</th>
+                    <th scope="col" class="text-end">Stock</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- Unlike the public catalog, this list includes deactivated products. -->
+                <tr th:each="product : ${products}"
+                    th:classappend="${!product.active} ? 'table-secondary'">
+                    <td>
+                        <span class="fw-semibold" th:text="${product.name}">Mechanical Keyboard</span>
+                        <div class="small text-muted text-truncate description-preview"
+                             th:text="${product.description}">Description</div>
+                    </td>
+                    <td class="text-end"
+                        th:text="'$' + ${#numbers.formatDecimal(product.price, 1, 'COMMA', 2, 'POINT')}">$79.99</td>
+                    <td class="text-end">
+                        <span th:text="${product.stock}">25</span>
+                        <span th:unless="${product.inStock}" class="badge text-bg-danger ms-1">Out</span>
+                    </td>
+                    <td>
+                        <span th:if="${product.active}" class="badge text-bg-success">Active</span>
+                        <span th:unless="${product.active}" class="badge text-bg-secondary">Inactive</span>
+                    </td>
+                    <td class="text-end text-nowrap">
+                        <a class="btn btn-sm btn-outline-primary"
+                           th:href="@{/owner/products/{id}/edit(id=${product.id})}">Edit</a>
+                        <!-- POST forms, not links, so neither action can fire from a prefetch. -->
+                        <form th:if="${product.active}" class="d-inline" method="post"
+                              th:action="@{/owner/products/{id}/deactivate(id=${product.id})}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Deactivate</button>
+                        </form>
+                        <form th:unless="${product.active}" class="d-inline" method="post"
+                              th:action="@{/owner/products/{id}/reactivate(id=${product.id})}">
+                            <button type="submit" class="btn btn-sm btn-outline-success">Reactivate</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <p class="text-muted small mt-3">
+        <span th:text="${products.size()}">0</span> product(s), including inactive ones.
+        Products are deactivated rather than deleted, because past purchases refer to them.
+    </p>
+
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Normalize line endings in the repository.
+#
+# This matters for portability: the deployment targets are Linux, and a mvnw
+# checked out with CRLF endings fails there with "bad interpreter". Pinning the
+# shell wrapper to LF and the Windows wrapper to CRLF keeps both usable.
+
+* text=auto eol=lf
+
+mvnw      text eol=lf
+*.sh      text eol=lf
+mvnw.cmd  text eol=crlf
+*.cmd     text eol=crlf
+*.bat     text eol=crlf
+
+*.jar binary
+*.png binary
+*.ico binary

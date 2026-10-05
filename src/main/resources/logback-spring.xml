@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for the SLF4J logging used throughout the application.
+
+  Everything goes to the console on purpose. Writing to a local file is the wrong
+  default for a cloud application: instances are disposable and their filesystems
+  are not durable. Azure App Service, Heroku, container platforms and PaaS log
+  collectors all read stdout, so console output is the one destination that works
+  unchanged on every target.
+-->
+<configuration>
+
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- Registrations, purchases and inventory changes: the shop's audit trail. -->
+    <logger name="edu.gcu.cst323.cloudshop" level="INFO"/>
+
+    <root level="WARN">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+</configuration>

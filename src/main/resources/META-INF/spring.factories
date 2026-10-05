@@ -1,0 +1,4 @@
+# Registers the startup check that requires DB_PASSWORD to be supplied.
+# EnvironmentPostProcessor is still registered through spring.factories in Spring Boot 3.
+org.springframework.boot.env.EnvironmentPostProcessor=\
+edu.gcu.cst323.cloudshop.config.RequiredDatabasePasswordValidator

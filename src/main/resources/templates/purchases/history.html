@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('My Purchases')}"></head>
+<body class="bg-body-tertiary">
+
+<nav th:replace="~{fragments/layout :: navbar('purchases')}"></nav>
+<!-- A purchase redirects here, so this banner doubles as the order confirmation. -->
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">My Purchases</h1>
+        <a class="btn btn-primary" th:href="@{/products}">Continue shopping</a>
+    </div>
+
+    <div th:if="${purchases.isEmpty()}" class="alert alert-info">
+        You have not bought anything yet.
+        <a th:href="@{/products}" class="alert-link">Browse the catalog.</a>
+    </div>
+
+    <div th:unless="${purchases.isEmpty()}" class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th scope="col">Date and time</th>
+                    <th scope="col">Product</th>
+                    <th scope="col" class="text-end">Quantity</th>
+                    <th scope="col" class="text-end">Unit price paid</th>
+                    <th scope="col" class="text-end">Total</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- The purchase just made is highlighted, matching the confirmation banner. -->
+                <tr th:each="purchase : ${purchases}"
+                    th:classappend="${purchase.id == confirmedPurchaseId} ? 'table-success'">
+                    <td th:text="${#temporals.format(purchase.purchasedAt, 'MMM d, yyyy h:mm a')}">Oct 4, 2026 3:15 PM</td>
+                    <td>
+                        <a th:if="${purchase.product.active}"
+                           th:href="@{/products/{id}(id=${purchase.product.id})}"
+                           th:text="${purchase.product.name}">Mechanical Keyboard</a>
+                        <!-- A product the owner has since deactivated has no public page to link to. -->
+                        <span th:unless="${purchase.product.active}"
+                              th:text="${purchase.product.name}">Mechanical Keyboard</span>
+                    </td>
+                    <td class="text-end" th:text="${purchase.quantity}">2</td>
+                    <td class="text-end"
+                        th:text="'$' + ${#numbers.formatDecimal(purchase.unitPrice, 1, 'COMMA', 2, 'POINT')}">$79.99</td>
+                    <td class="text-end"
+                        th:text="'$' + ${#numbers.formatDecimal(purchase.totalPrice, 1, 'COMMA', 2, 'POINT')}">$159.98</td>
+                </tr>
+                </tbody>
+                <tfoot class="table-light">
+                <tr>
+                    <th scope="row" colspan="4" class="text-end">Total spent</th>
+                    <td class="text-end fw-semibold"
+                        th:text="'$' + ${#numbers.formatDecimal(totalSpent, 1, 'COMMA', 2, 'POINT')}">$159.98</td>
+                </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <p class="text-muted small mt-3">
+        <span th:text="${purchases.size()}">0</span> purchase(s).
+        Prices shown are what you paid at the time, even if the product has been repriced since.
+    </p>
+
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+
+</body>
+</html>

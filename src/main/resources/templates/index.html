@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('Home')}"></head>
+<body class="bg-body-tertiary">
+
+<nav th:replace="~{fragments/layout :: navbar('home')}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container">
+
+    <div class="p-5 mb-4 bg-white border rounded-3 shadow-sm">
+        <h1 class="display-6">CloudShop</h1>
+        <p class="lead">
+            A small online shop built for CST-323 Cloud Computing. Browse the catalog,
+            create a buyer account, and purchase what is in stock.
+        </p>
+        <a class="btn btn-primary btn-lg" th:href="@{/products}">
+            Browse <span th:text="${productCount}">8</span> products
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 card-title">Shopping</h2>
+                    <p class="card-text">
+                        The catalog is open to everyone. Buying needs a buyer account,
+                        which takes a username, an email and a password.
+                    </p>
+                    <div sec:authorize="isAnonymous()" class="d-flex gap-2">
+                        <a class="btn btn-outline-primary" th:href="@{/register}">Create an account</a>
+                        <a class="btn btn-outline-secondary" th:href="@{/login}">Sign in</a>
+                    </div>
+                    <a sec:authorize="hasRole('BUYER')" class="btn btn-outline-primary"
+                       th:href="@{/my-purchases}">My purchases</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 card-title">Stock you can trust</h2>
+                    <p class="card-text mb-0">
+                        Each purchase checks and reduces stock in a single database
+                        statement, so two buyers can never both buy the last unit. The
+                        price you pay is recorded with the purchase and does not change
+                        if the product is repriced later.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 card-title">For the shop owner</h2>
+                    <p class="card-text">
+                        One owner account manages the inventory and sees every sale,
+                        filtered by product and date, with a revenue total.
+                    </p>
+                    <div sec:authorize="hasRole('OWNER')" class="d-flex gap-2">
+                        <a class="btn btn-outline-primary" th:href="@{/owner/products}">Inventory</a>
+                        <a class="btn btn-outline-secondary" th:href="@{/owner/sales}">Sales</a>
+                    </div>
+                    <p sec:authorize="!hasRole('OWNER')" class="card-text text-muted small mb-0">
+                        The owner account is created when the application starts. It
+                        cannot be registered from this site.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+
+</body>
+</html>

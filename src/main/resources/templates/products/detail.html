@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head(${product.name})}"></head>
+<body class="bg-body-tertiary">
+
+<nav th:replace="~{fragments/layout :: navbar('products')}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container">
+
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/products}">Products</a></li>
+            <li class="breadcrumb-item active" aria-current="page"
+                th:text="${product.name}">Mechanical Keyboard</li>
+        </ol>
+    </nav>
+
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h1 class="h4 mb-0" th:text="${product.name}">Mechanical Keyboard</h1>
+            <span th:if="${product.inStock}" class="badge text-bg-success"
+                  th:text="${product.stock} + ' in stock'">25 in stock</span>
+            <span th:unless="${product.inStock}" class="badge text-bg-secondary">Out of stock</span>
+        </div>
+
+        <div class="card-body">
+            <p class="lead" th:text="${product.description}">Product description.</p>
+            <p class="fs-3 fw-semibold mb-0"
+               th:text="'$' + ${#numbers.formatDecimal(product.price, 1, 'COMMA', 2, 'POINT')}">$79.99</p>
+        </div>
+
+        <div class="card-footer bg-white">
+
+            <!-- Out of stock: no purchase form for anyone. -->
+            <div th:unless="${product.inStock}" class="alert alert-secondary mb-0">
+                This product is out of stock and cannot be purchased right now.
+            </div>
+
+            <th:block th:if="${product.inStock}">
+
+                <!--
+                  Buyers get the quantity form. There is no max attribute on purpose: the
+                  stock printed above is only what it was when this page loaded, so the
+                  real check happens on the server, inside the purchase transaction.
+                -->
+                <th:block sec:authorize="hasRole('BUYER')">
+                    <form th:action="@{/products/{id}/purchase(id=${product.id})}"
+                          th:object="${purchaseForm}" method="post"
+                          class="row g-2 align-items-start" novalidate>
+                        <div class="col-auto">
+                            <label for="quantity" class="form-label">Quantity</label>
+                            <input type="number" id="quantity" class="form-control quantity-input"
+                                   min="1" step="1"
+                                   th:field="*{quantity}"
+                                   th:classappend="${#fields.hasErrors('quantity')} ? 'is-invalid'">
+                            <div class="invalid-feedback" th:errors="*{quantity}">Quantity error</div>
+                        </div>
+                        <div class="col-auto purchase-button">
+                            <button type="submit" class="btn btn-primary">Purchase</button>
+                        </div>
+                    </form>
+                </th:block>
+
+                <div sec:authorize="isAnonymous()" class="alert alert-info mb-0">
+                    <a class="alert-link" th:href="@{/login}">Sign in</a> or
+                    <a class="alert-link" th:href="@{/register}">create a buyer account</a>
+                    to purchase this product.
+                </div>
+
+                <div sec:authorize="hasRole('OWNER')" class="alert alert-light border mb-0">
+                    The owner account manages the shop and cannot make purchases.
+                    <a class="alert-link"
+                       th:href="@{/owner/products/{id}/edit(id=${product.id})}">Edit this product.</a>
+                </div>
+
+            </th:block>
+        </div>
+    </div>
+
+    <a class="btn btn-outline-secondary mt-3" th:href="@{/products}">Back to products</a>
+
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+
+</body>
+</html>

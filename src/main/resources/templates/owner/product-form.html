@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<!--
+  One template serves both /owner/products/new and /owner/products/{id}/edit. The
+  controller supplies pageTitle and formAction; everything else is identical.
+-->
+<head th:replace="~{fragments/layout :: head(${pageTitle})}"></head>
+<body class="bg-body-tertiary">
+
+<nav th:replace="~{fragments/layout :: navbar('inventory')}"></nav>
+
+<main class="container">
+
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/owner/products}">Inventory</a></li>
+            <li class="breadcrumb-item active" aria-current="page" th:text="${pageTitle}">Add Product</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3 mb-4" th:text="${pageTitle}">Add Product</h1>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form th:action="@{${formAction}}" th:object="${productForm}" method="post" novalidate>
+
+                <!-- Lives inside the form: #fields resolves against the enclosing th:object. -->
+                <div th:if="${#fields.hasAnyErrors()}" class="alert alert-danger">
+                    Please correct the highlighted fields below.
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label for="name" class="form-label">Name</label>
+                        <input type="text" id="name" class="form-control"
+                               th:field="*{name}"
+                               th:classappend="${#fields.hasErrors('name')} ? 'is-invalid'">
+                        <div class="invalid-feedback" th:errors="*{name}">Name error</div>
+                    </div>
+
+                    <div class="col-12">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea id="description" class="form-control" rows="3"
+                                  th:field="*{description}"
+                                  th:classappend="${#fields.hasErrors('description')} ? 'is-invalid'"></textarea>
+                        <div class="invalid-feedback" th:errors="*{description}">Description error</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="price" class="form-label">Price (USD)</label>
+                        <input type="number" id="price" class="form-control" min="0" step="0.01"
+                               th:field="*{price}"
+                               th:classappend="${#fields.hasErrors('price')} ? 'is-invalid'">
+                        <div class="invalid-feedback" th:errors="*{price}">Price error</div>
+                        <div class="form-text">Changing the price does not alter purchases already made.</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="stock" class="form-label">Stock</label>
+                        <input type="number" id="stock" class="form-control" min="0" step="1"
+                               th:field="*{stock}"
+                               th:classappend="${#fields.hasErrors('stock')} ? 'is-invalid'">
+                        <div class="invalid-feedback" th:errors="*{stock}">Stock error</div>
+                        <div class="form-text">Units on hand. Zero marks the product as out of stock.</div>
+                    </div>
+                </div>
+
+                <div class="mt-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <a class="btn btn-outline-secondary" th:href="@{/owner/products}">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+
+</body>
+</html>

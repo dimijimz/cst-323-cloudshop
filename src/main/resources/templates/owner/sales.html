@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Sales')}"></head>
+<body class="bg-body-tertiary">
+
+<nav th:replace="~{fragments/layout :: navbar('sales')}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container">
+
+    <h1 class="h3 mb-3">Sales</h1>
+
+    <!--
+      A GET form: the filters travel in the query string, so a filtered report can
+      be bookmarked. Nothing here changes data, so no CSRF token is involved.
+    -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form th:action="@{/owner/sales}" method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="productId" class="form-label">Product</label>
+                    <select id="productId" name="productId" class="form-select">
+                        <option value="">All products</option>
+                        <option th:each="product : ${products}"
+                                th:value="${product.id}"
+                                th:selected="${product.id == productId}"
+                                th:text="${product.active} ? ${product.name} : ${product.name} + ' (inactive)'">
+                            Mechanical Keyboard</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="from" class="form-label">From</label>
+                    <input type="date" id="from" name="from" class="form-control" th:value="${from}">
+                </div>
+                <div class="col-md-3">
+                    <label for="to" class="form-label">To</label>
+                    <input type="date" id="to" name="to" class="form-control" th:value="${to}">
+                </div>
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-grow-1">Filter</button>
+                    <a th:if="${filtered}" class="btn btn-outline-secondary" th:href="@{/owner/sales}">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Revenue total</div>
+                    <div class="fs-3 fw-semibold" id="revenue-total"
+                         th:text="'$' + ${#numbers.formatDecimal(revenueTotal, 1, 'COMMA', 2, 'POINT')}">$0.00</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Purchases</div>
+                    <div class="fs-3 fw-semibold" th:text="${sales.size()}">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Units sold</div>
+                    <div class="fs-3 fw-semibold" th:text="${unitsSold}">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div th:if="${sales.isEmpty()}" class="alert alert-info">
+        <span th:if="${filtered}">No purchases match these filters.</span>
+        <span th:unless="${filtered}">No purchases have been made yet.</span>
+    </div>
+
+    <div th:unless="${sales.isEmpty()}" class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th scope="col">Date and time</th>
+                    <th scope="col">Buyer</th>
+                    <th scope="col">Product</th>
+                    <th scope="col" class="text-end">Quantity</th>
+                    <th scope="col" class="text-end">Unit price</th>
+                    <th scope="col" class="text-end">Total</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="sale : ${sales}">
+                    <td th:text="${#temporals.format(sale.purchasedAt, 'MMM d, yyyy h:mm a')}">Oct 4, 2026 3:15 PM</td>
+                    <td th:text="${sale.buyer.username}">alice</td>
+                    <td th:text="${sale.product.name}">Mechanical Keyboard</td>
+                    <td class="text-end" th:text="${sale.quantity}">2</td>
+                    <td class="text-end"
+                        th:text="'$' + ${#numbers.formatDecimal(sale.unitPrice, 1, 'COMMA', 2, 'POINT')}">$79.99</td>
+                    <td class="text-end"
+                        th:text="'$' + ${#numbers.formatDecimal(sale.totalPrice, 1, 'COMMA', 2, 'POINT')}">$159.98</td>
+                </tr>
+                </tbody>
+                <tfoot class="table-light">
+                <tr>
+                    <th scope="row" colspan="5" class="text-end">Revenue total</th>
+                    <td class="text-end fw-semibold"
+                        th:text="'$' + ${#numbers.formatDecimal(revenueTotal, 1, 'COMMA', 2, 'POINT')}">$159.98</td>
+                </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <p class="text-muted small mt-3">
+        Both dates are inclusive. The unit price is what the buyer paid at the time of sale.
+    </p>
+
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+
+</body>
+</html>

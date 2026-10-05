@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Products')}"></head>
+<body class="bg-body-tertiary">
+
+<nav th:replace="~{fragments/layout :: navbar('products')}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container">
+
+    <h1 class="h3 mb-3">Products</h1>
+
+    <div th:if="${products.isEmpty()}" class="alert alert-info">
+        The catalog is empty right now. Please check back soon.
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        <div class="col" th:each="product : ${products}">
+            <div class="card h-100 shadow-sm"
+                 th:classappend="${!product.inStock} ? 'product-unavailable'">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <h2 class="h5 card-title">
+                            <a class="text-decoration-none"
+                               th:href="@{/products/{id}(id=${product.id})}"
+                               th:text="${product.name}">Mechanical Keyboard</a>
+                        </h2>
+                        <!-- Out-of-stock products stay listed, but are marked. -->
+                        <span th:unless="${product.inStock}"
+                              class="badge text-bg-secondary">Out of stock</span>
+                    </div>
+                    <p class="card-text text-muted flex-grow-1"
+                       th:text="${product.description}">Product description.</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fs-5 fw-semibold"
+                              th:text="'$' + ${#numbers.formatDecimal(product.price, 1, 'COMMA', 2, 'POINT')}">$79.99</span>
+                        <span class="small"
+                              th:classappend="${product.inStock} ? 'text-success' : 'text-danger'"
+                              th:text="${product.stock} + ' in stock'">25 in stock</span>
+                    </div>
+                </div>
+                <div class="card-footer bg-white">
+                    <a th:if="${product.inStock}" class="btn btn-primary w-100"
+                       th:href="@{/products/{id}(id=${product.id})}">View and buy</a>
+                    <a th:unless="${product.inStock}" class="btn btn-outline-secondary w-100"
+                       th:href="@{/products/{id}(id=${product.id})}">View details</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="text-muted small mt-3">
+        <span th:text="${products.size()}">0</span> product(s) in the catalog.
+    </p>
+
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+
+</body>
+</html>

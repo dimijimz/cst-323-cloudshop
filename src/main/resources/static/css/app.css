@@ -1,0 +1,32 @@
+/* Small additions on top of Bootstrap 5. Kept deliberately thin: the CDN
+   stylesheet does the heavy lifting so nothing large ships inside the jar. */
+
+body {
+    min-height: 100vh;
+}
+
+main {
+    padding-bottom: 2rem;
+}
+
+.card-title {
+    margin-bottom: 0.75rem;
+}
+
+/* Out-of-stock products stay in the catalog, visibly set back. */
+.product-unavailable {
+    opacity: 0.7;
+}
+
+.quantity-input {
+    width: 7rem;
+}
+
+/* Drops the Purchase button to the input's baseline, past the label above it. */
+.purchase-button {
+    padding-top: 2rem;
+}
+
+.description-preview {
+    max-width: 28rem;
+}
