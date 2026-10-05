@@ -63,3 +63,13 @@ logs/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# --- Elastic Beanstalk -------------------------------------------------------
+# The first three lines are what `eb init` adds. The fourth keeps config.yml in
+# the repository: it holds the application name, region, platform and the
+# deploy.artifact setting, and no credentials. Environment variables, including
+# DB_PASSWORD and OWNER_PASSWORD, live in the Elastic Beanstalk environment, not here.
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+!.elasticbeanstalk/config.yml

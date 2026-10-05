@@ -372,8 +372,10 @@ cloudshop/
 ├── .env.example                    every environment variable, documented
 ├── Procfile, system.properties     Heroku process type and JDK version
 ├── docker-compose.yml              optional local MySQL
+├── .elasticbeanstalk/config.yml    EB CLI settings: application, region, jar artifact
 ├── docs/
 │   ├── ddl/                        schema.sql and seed.sql, exported from the migrations
+│   ├── deploy/                     AWS deployment log and the end-to-end smoke test
 │   └── diagrams/                   design-report diagrams, sources and render script
 └── src/
     ├── main/
@@ -419,14 +421,34 @@ Nothing in the source tree changes between platforms. Do not set
 `SPRING_PROFILES_ACTIVE=h2` on a deployment - it would run on a throwaway
 in-memory database.
 
+### AWS
+
+The first deployment was to AWS: Elastic Beanstalk (Java SE, Corretto 17) with RDS
+for MySQL 8.4 and CloudFront in front for HTTPS.
+[`docs/deploy/aws-deployment-log.md`](docs/deploy/aws-deployment-log.md) records it
+command by command, with what it found along the way, what it costs to leave
+running, and how to tear it down. The EB CLI settings, including the jar as the
+deploy artifact, are in `.elasticbeanstalk/config.yml`.
+
+To check a running deployment end to end - register, buy, stock, owner sign-in,
+price change, sales history - run:
+
+```bash
+./docs/deploy/smoke-test.sh <base-url>
+```
+
+It reads the owner's credentials from `OWNER_USERNAME` and `OWNER_PASSWORD`, or from
+the secrets file written at deployment time, and never prints them.
+
 ## Known limitations
 
-- **Not yet run against real MySQL.** Docker Desktop is broken on the development
-  machine, so the migrations have only been executed by H2 in MySQL compatibility
-  mode. H2 accepts the MySQL syntax used here, but it is not MySQL: the first
-  deployment to a managed MySQL will be the first time MySQL itself parses
-  `V1__create_schema.sql`. The schema deliberately sticks to plain, portable DDL
-  to keep that risk low.
+- **Real MySQL is only exercised in the cloud.** Docker Desktop is broken on the
+  development machine, so locally the migrations only ever run on H2 in MySQL
+  compatibility mode, which is not MySQL. MySQL itself first ran them on
+  2026-10-05, on Amazon RDS for MySQL 8.4.9, where V1 and V2 both applied unchanged
+  (see [`docs/deploy/aws-deployment-log.md`](docs/deploy/aws-deployment-log.md)).
+  A new migration still gets its first real test at its first deployment, so keep
+  to plain, portable DDL. `docker-compose.yml` has not been run at all.
 - **CHECK constraints need MySQL 8.0.16+.** Older versions accept and ignore them.
 - **One owner is an application rule.** Registration can only create buyers and
   the initializer only creates an owner when none exists, but there is no database
