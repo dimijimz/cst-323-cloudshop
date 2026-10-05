@@ -82,6 +82,11 @@ $env:JAVA_HOME = 'C:\Program Files\Java\jdk-17'; $env:SPRING_PROFILES_ACTIVE = '
 
 Then open <http://localhost:8080>.
 
+If startup fails with "Port 8080 was already in use" - Docker Desktop's backend is
+one program that takes it - choose another port by adding `PORT=8085` to the front
+of the Bash command, or `$env:PORT = '8085';` to the PowerShell one, and open that
+port instead.
+
 The database lives in memory, so **every restart starts over**: the seed products
 come back, the owner is created again from the two variables, and registered
 buyers and their purchases are gone.
