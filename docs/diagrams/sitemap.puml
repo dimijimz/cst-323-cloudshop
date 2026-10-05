@@ -1,0 +1,89 @@
+@startuml sitemap
+' Sitemap: every page, grouped by who can reach it, and the links between them.
+' The groups mirror the URL rules in SecurityConfig. Keep both in step.
+!pragma layout smetana
+skinparam dpi 150
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam roundCorner 8
+skinparam defaultTextAlignment center
+skinparam ArrowColor #33506E
+skinparam ArrowFontSize 10
+skinparam rectangle {
+    BackgroundColor #FFFFFF
+    BorderColor #33506E
+}
+skinparam package {
+    BorderColor #8FA3B8
+    FontStyle bold
+}
+
+title CloudShop - Sitemap
+
+package "PUBLIC - no sign-in needed" as PUB #EEF4FB {
+    rectangle "**Home**\n/" as home
+    rectangle "**Catalog**\n/products" as catalog
+    rectangle "**Product detail**\n/products/{id}" as detail
+    rectangle "**Sign in**\n/login" as login
+    rectangle "**Register**\n/register" as register
+    rectangle "**Error page**\n403 Forbidden, 404 Not Found" as error
+    rectangle "**Health probes** (JSON, not linked)\n/health\n/actuator/health\n/actuator/info" as health
+}
+
+package "BUYER - role BUYER only" as BUY #EEF8EE {
+    rectangle "**Purchase** (form action)\nPOST /products/{id}/purchase" as purchase #F7FCF7
+    rectangle "**My purchases**\n/my-purchases" as history
+}
+
+package "OWNER - role OWNER only" as OWN #FFF6E6 {
+    rectangle "**Inventory**\n/owner/products" as inventory
+    rectangle "**Add product**\n/owner/products/new" as newproduct
+    rectangle "**Edit product**\n/owner/products/{id}/edit" as editproduct
+    rectangle "**Sales report**\n/owner/sales\n?productId=&from=&to=" as sales
+}
+
+' --- public browsing ---
+home --> catalog : Browse products
+home --> register : Create an account
+home --> login : Sign in
+catalog --> detail : View and buy
+detail --> catalog : Back to products
+detail --> login : Sign in to purchase
+detail --> register : create a buyer account
+login --> register : New here?
+register --> login : account created
+error --> catalog : Back to the catalog
+
+' --- signing in lands by role ---
+login --> catalog : signed in as buyer
+login --> inventory : signed in as owner
+
+' --- buyer ---
+detail --> purchase : Purchase
+purchase --> history : success:\nconfirmation
+purchase --> detail : not enough stock:\nerror message
+history --> catalog : Continue shopping
+history --> detail : product name
+
+' --- owner ---
+inventory --> newproduct : Add Product
+inventory --> editproduct : Edit
+newproduct --> inventory : Save / Cancel
+editproduct --> inventory : Save / Cancel
+detail --> editproduct : Edit this product
+inventory --> sales : Sales (nav bar)
+sales --> inventory : Inventory (nav bar)
+
+legend bottom left
+    <b>Navigation bar, on every page</b>
+    Everyone: Home, Products        Anonymous: Sign in, Register
+    Buyer: My Purchases        Owner: Inventory, Sales
+    Signed in: Sign out (POST /logout, then back to Sign in)
+
+    <b>Not drawn as arrows</b>
+    Inventory: Deactivate / Reactivate (POST, returns to Inventory)
+    Sales report: Filter / Clear (reloads the Sales report)
+    A buyer or anonymous visitor requesting an Owner page gets the Error page (403) or Sign in.
+endlegend
+@enduml

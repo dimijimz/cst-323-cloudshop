@@ -1,0 +1,87 @@
+@startuml shopping-flowchart
+' Activity diagram of the buyer's shopping flow. Activity diagrams use PlantUML's
+' own layout, so this one needs neither Graphviz nor smetana.
+skinparam dpi 150
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam roundCorner 10
+skinparam activity {
+    BackgroundColor #FBFCFE
+    BorderColor #33506E
+    DiamondBackgroundColor #FFF6DD
+    DiamondBorderColor #9A7B1C
+}
+skinparam ArrowColor #33506E
+skinparam swimlane {
+    BorderColor #8FA3B8
+    TitleFontStyle bold
+}
+
+title CloudShop - Buyer Shopping Flow
+
+|Buyer|
+start
+repeat
+    :Browse the catalog
+    GET /products;
+    :Open a product
+    GET /products/{id};
+
+    if (Product in stock?) then (no)
+        :Page shows "Out of stock"
+        and no purchase form;
+    else (yes)
+        if (Signed in as a buyer?) then (no)
+            if (Has an account?) then (no)
+                :Register
+                GET, POST /register;
+            else (yes)
+            endif
+            :Sign in
+            GET, POST /login;
+            :Return to the product page;
+        else (yes)
+        endif
+
+        repeat
+            :Choose a quantity;
+            :Submit the purchase
+            POST /products/{id}/purchase;
+
+            |CloudShop server|
+            if (Quantity is a whole number >= 1?) then (no)
+                :Redisplay the product page
+                with a field error;
+            else (yes)
+                :Begin transaction;
+                :Stock check and decrement in one statement:
+                UPDATE products SET stock = stock - quantity
+                WHERE id = ? AND active AND stock >= quantity;
+                if (One row updated?) then (yes)
+                    :INSERT purchase row with the
+                    unit price paid, total and timestamp;
+                    :Commit;
+                else (no - not enough stock)
+                    :Roll back, nothing is sold;
+                    :Redirect to the product page with
+                    "Only N left in stock ... Nothing was purchased.";
+                endif
+            endif
+            |Buyer|
+        repeat while (Purchase recorded?) is (no - change the quantity) not (yes)
+
+        :Confirmation
+        "Purchase confirmed: 2 x Keyboard for $159.98.";
+        :Purchase history, newest first
+        GET /my-purchases;
+    endif
+repeat while (Keep shopping?) is (yes) not (no)
+stop
+
+legend bottom left
+    Two buyers racing for the last unit both reach the UPDATE.
+    The database lets one of them match the row; the other updates
+    zero rows and takes the "not enough stock" branch.
+endlegend
+@enduml

@@ -1,0 +1,71 @@
+@startuml er-diagram
+' Entity relationship diagram, transcribed from the Flyway schema:
+' src/main/resources/db/migration/V1__create_schema.sql
+' If V1 is ever followed by a V3 that changes a table, update this file to match.
+!pragma layout smetana
+skinparam dpi 150
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam roundCorner 6
+skinparam class {
+    BackgroundColor #FBFCFE
+    BorderColor #33506E
+    ArrowColor #33506E
+    HeaderBackgroundColor #DCE8F5
+    FontStyle bold
+}
+hide circle
+hide methods
+
+title CloudShop - Entity Relationship Diagram\n<size:11>from Flyway migration V1__create_schema.sql (MySQL 8, InnoDB, utf8mb4)</size>
+
+entity "users" as users {
+    * **id** : BIGINT  <<PK, AUTO_INCREMENT>>
+    --
+    * username : VARCHAR(50)  <<UNIQUE>>
+    * email : VARCHAR(120)  <<UNIQUE>>
+    * password_hash : VARCHAR(100)
+    * role : VARCHAR(10)
+    * created_at : DATETIME(6)
+    ..
+    CHECK role IN ('BUYER', 'OWNER')
+}
+
+entity "products" as products {
+    * **id** : BIGINT  <<PK, AUTO_INCREMENT>>
+    --
+    * name : VARCHAR(120)
+    * description : VARCHAR(1000)
+    * price : DECIMAL(10,2)
+    * stock : INT
+    * active : BOOLEAN  DEFAULT TRUE
+    ..
+    CHECK price >= 0
+    CHECK stock >= 0
+}
+
+entity "purchases" as purchases {
+    * **id** : BIGINT  <<PK, AUTO_INCREMENT>>
+    --
+    * buyer_id : BIGINT  <<FK to users.id>>
+    * product_id : BIGINT  <<FK to products.id>>
+    * quantity : INT
+    * unit_price : DECIMAL(10,2)
+    * total_price : DECIMAL(16,2)
+    * purchased_at : DATETIME(6)  <<INDEX>>
+    ..
+    CHECK quantity > 0
+    CHECK unit_price >= 0
+    CHECK total_price >= 0
+}
+
+users ||--o{ purchases : "  buyer_id\n  one buyer makes\n  zero or more purchases"
+products ||--o{ purchases : "  product_id\n  one product appears in\n  zero or more purchases"
+
+legend bottom left
+    <b>*</b>  NOT NULL (every column is)      <b>PK</b> primary key      <b>FK</b> foreign key
+    Rows in <b>products</b> are never deleted, only deactivated, because <b>purchases</b> references them.
+    <b>purchases.unit_price</b> is a copy of the price at the time of sale, not a join to <b>products.price</b>.
+endlegend
+@enduml
