@@ -605,6 +605,16 @@ script in section 7.4.
 About $0.036 an hour, $0.87 a day, $26.60 a month, taken from the account's Free plan
 credits. Nothing is charged to a card while the account is on that plan.
 
+A final inventory after the deployment found exactly the resources above and
+nothing else that bills: no load balancer, NAT gateway, WAF web ACL or Secrets
+Manager secret, and one automated RDS snapshot, which is free at this size.
+
+The same check showed **$140 of credits remaining, up from $100 at preflight.** AWS
+gives Free plan accounts extra credits for certain first-time activities, and
+creating the budget, the instance and the database appear to have counted; that
+reason is an inference, the balance is what the API reported. At $0.87 a day, $140
+lasts about 160 days, which is close to the plan's own end date of 2027-03-27.
+
 ### 9.2 Tearing it down
 
 In this order. The second step matters: the database's security group refers to the
