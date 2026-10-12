@@ -496,11 +496,12 @@ cloudshop/
 ├── mvnw, mvnw.cmd, .mvn/           Maven wrapper - no local Maven needed
 ├── .env.example                    every environment variable, documented
 ├── Procfile, system.properties     Heroku process type and JDK version
+├── buildspec.yml                   what AWS CodeBuild runs in the pipeline's Build stage
 ├── docker-compose.yml              optional local MySQL
 ├── .elasticbeanstalk/config.yml    EB CLI settings: application, region, jar artifact
 ├── docs/
 │   ├── ddl/                        schema.sql and seed.sql, exported from the migrations
-│   ├── deploy/                     deployment logs and the end-to-end smoke test
+│   ├── deploy/                     deployment logs, pipeline definitions, Heroku config script, smoke test
 │   └── diagrams/                   design-report diagrams, sources and render script
 └── src/
     ├── main/
@@ -559,6 +560,24 @@ deploy artifact, are in `.elasticbeanstalk/config.yml`.
 [`docs/deploy/activity6-log.md`](docs/deploy/activity6-log.md) records the later
 redeploy that added the logging interceptor, with `APP_LOG_LEVEL=DEBUG` and the
 lines it put in `/var/log/web.stdout.log`.
+
+**Continuous deployment.** A push to `main` deploys itself to the AWS environment
+through AWS CodePipeline, `cloudshop-pipeline`:
+
+1. **Source** - GitHub, through an AWS CodeConnections connection.
+2. **Build** - AWS CodeBuild runs [`buildspec.yml`](buildspec.yml): Corretto 17 and
+   `./mvnw -B clean package`, tests included. A failing test fails the build, and
+   the pipeline stops there.
+3. **Deploy** - Elastic Beanstalk, application `cloudshop`, environment
+   `cloudshop-env`.
+
+The build's only artifact is the executable jar, at the root of the bundle, which
+is what the Java SE platform runs. The `Procfile` in this repository is Heroku's
+and is deliberately not sent. A whole run takes about two and a half minutes. The
+definitions the pipeline, its build project and its two service roles were created
+from are in [`docs/deploy/pipeline`](docs/deploy/pipeline), and section 5 of the
+[Activity 6 log](docs/deploy/activity6-log.md) records how it was set up, including
+how the roles were scoped.
 
 To check a running deployment end to end - register, buy, stock, owner sign-in,
 price change, sales history - run:

@@ -718,7 +718,7 @@ push to main --> Source (GitHub, through a CodeConnections connection)
 | Resource | Name | Notes |
 |----------|------|-------|
 | Pipeline | `cloudshop-pipeline` | Type V2, execution mode SUPERSEDED, push trigger on branch `main` |
-| GitHub connection | `cloudshop-github` | AWS CodeConnections. Created `PENDING`; the account holder approves it in the console (5.4) |
+| GitHub connection | `cloudshop-github-app` | AWS CodeConnections, backed by the AWS Connector for GitHub app installed on the repository. It replaced the first one, `cloudshop-github`, which could read the repository but did not deliver pushes (5.7, 5.8) |
 | Build project | `cloudshop-build` | `BUILD_GENERAL1_SMALL`, the smallest on-demand type. Image `aws/codebuild/amazonlinux-x86_64-standard:5.0`. 15-minute timeout, one build at a time |
 | Artifact bucket | `cloudshop-pipeline-artifacts-aecebd27` | The only bucket created. Private: all four public-access blocks on, SSE-S3 encryption |
 | Build role | `cloudshop-codebuild-role` | One inline policy, no managed policies |
@@ -961,3 +961,21 @@ The pipeline's trigger itself is stored as intended:
 
 So the remaining work is on the connection, and needs the account holder at the
 console once more.
+
+### 5.8 A connection with the app behind it
+
+The operator created a new connection in the console, `cloudshop-github-app`, this
+time with the AWS Connector for GitHub app installed on the repository.
+
+| Step | Result |
+|------|--------|
+| Pipeline role policy | `UseConnection` now names the new connection only |
+| `aws codepipeline update-pipeline` | Source action `GitHub` points at `cloudshop-github-app`; pipeline version 2; the push trigger on `main` unchanged |
+| The two earlier connections, both named `cloudshop-github` | Deleted |
+
+The connection is therefore named `cloudshop-github-app`, not `cloudshop-github`
+as first planned. A connection cannot be renamed, and the one with that name was
+the one that could not deliver pushes.
+
+The commit that adds this section is the test: it is pushed with nothing started
+by hand, and 5.9 records what the pipeline did with it.
