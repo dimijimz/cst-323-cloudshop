@@ -16,7 +16,8 @@ Three parts:
 |------|-------|
 | 1. Logging with an interceptor | Done. Committed as `a04a980` and pushed. A later fix to the start-up line, `3a99083`, brought the tests to 151 (4.6) |
 | 2. AWS redeploy | Deployed and Green with `APP_LOG_LEVEL=DEBUG`, now on `cloudshop-1.0.0-3a99083`. ENTER, EXIT and EXCEPTION lines confirmed in `/var/log/web.stdout.log`. The signed-in smoke test is left for the operator (3.4) |
-| 3. Heroku and Loggly | Live at `https://cst323-cloudshop-dj-debe1645cf87.herokuapp.com` on a Basic dyno with JawsDB's free plan. Flyway applied V1 and V2; ENTER, EXIT and EXCEPTION lines confirmed in `heroku logs`. **The first start logged the database password** (4.6): fixed, but the password still has to be changed. That, the smoke tests and the Loggly drain are left for the operator (4.9) |
+| 3. Heroku and Loggly | Live at `https://cst323-cloudshop-dj-debe1645cf87.herokuapp.com` on a Basic dyno with JawsDB's free plan. Flyway applied V1 and V2; ENTER, EXIT and EXCEPTION lines confirmed in `heroku logs`. **The first start logged the database password** (4.6): fixed, and the password has since been changed (4.11). The smoke tests and the Loggly drain are left for the operator (4.9) |
+| 4. CI/CD pipeline (added later) | Being built (section 5). The connection, bucket, roles and build project exist and a test build passed. The pipeline itself waits for the GitHub connection to be approved in the console (5.4) |
 
 ## Ground rules
 
@@ -679,3 +680,155 @@ Ready, Green, `/actuator/health` 200 through CloudFront. `APP_LOG_LEVEL` is stil
 
 To stop the charge and keep the app: `heroku ps:scale web=0 -a cst323-cloudshop-dj`.
 To remove everything, database included: `heroku apps:destroy cst323-cloudshop-dj`.
+
+### 4.11 The database password was changed (03:07 UTC)
+
+The operator reset the password in JawsDB's dashboard. What followed is worth
+knowing before doing it again:
+
+| Time (UTC) | Event |
+|------------|-------|
+| 03:07:55 | JawsDB updated `JAWSDB_URL` itself. Heroku recorded it as release v8, `Update JAWSDB by jawsdb`, and restarted the dyno |
+| 03:08:05 | The dyno started with the new `JAWSDB_URL` but the old `DB_PASSWORD`, which is the copy the application reads. Flyway could not connect (`Access denied for user ... (using password: YES)`), and the process exited. Heroku restarted it and it crashed again: the site answered 503 |
+| 03:12 | `APP_LOG_LEVEL=DEBUG ./docs/deploy/heroku-config.sh cst323-cloudshop-dj` re-read `JAWSDB_URL` and set `DB_PASSWORD` to match |
+| 03:12:59 | Dyno up. `/actuator/health` 200, `/products` 200 with eight products; the data was untouched by the reset |
+
+So the site was down for about five minutes, the gap between the reset and the
+script. That is the cost of keeping a split copy of the URL: **after any JawsDB
+credential change, run `heroku-config.sh` straight away.**
+
+Checked afterwards, by count only: the new password appears nowhere in
+`heroku logs`, and neither does the owner password. The one old line that held
+the previous password is still in the buffer, and that password no longer works.
+
+## 5. CI/CD: AWS CodePipeline to Elastic Beanstalk
+
+Added after the three parts above. Every push to `main` on
+`github.com/dimijimz/cst-323-cloudshop` is to build, test and deploy itself to
+`cloudshop-env`.
+
+### 5.1 Design
+
+```
+push to main --> Source (GitHub, through a CodeConnections connection)
+             --> Build  (CodeBuild: Corretto 17, ./mvnw -B clean package, tests included)
+             --> Deploy (Elastic Beanstalk: application cloudshop, environment cloudshop-env)
+```
+
+| Resource | Name | Notes |
+|----------|------|-------|
+| Pipeline | `cloudshop-pipeline` | Type V2, execution mode SUPERSEDED, push trigger on branch `main` |
+| GitHub connection | `cloudshop-github` | AWS CodeConnections. Created `PENDING`; the account holder approves it in the console (5.4) |
+| Build project | `cloudshop-build` | `BUILD_GENERAL1_SMALL`, the smallest on-demand type. Image `aws/codebuild/amazonlinux-x86_64-standard:5.0`. 15-minute timeout, one build at a time |
+| Artifact bucket | `cloudshop-pipeline-artifacts-aecebd27` | The only bucket created. Private: all four public-access blocks on, SSE-S3 encryption |
+| Build role | `cloudshop-codebuild-role` | One inline policy, no managed policies |
+| Pipeline role | `cloudshop-pipeline-role` | One inline policy, no managed policies |
+| Build log group | `/aws/codebuild/cloudshop-build` | 14-day retention |
+
+The definitions these were created from are in [`pipeline/`](pipeline), with the
+account id, the bucket name and the connection id replaced by placeholders.
+
+**What Elastic Beanstalk receives is one file.** [`buildspec.yml`](../../buildspec.yml)
+declares the artifact as `target/*.jar` with `discard-paths: yes`, so the bundle
+is `cloudshop.jar` at its root and nothing else. The Java SE platform runs a
+bundle like that with `java -jar`. The repository's `Procfile` is not in it: that
+file is Heroku's, it starts `target/cloudshop.jar`, and a `Procfile` in the
+bundle would replace the one the platform generates.
+
+**A failing test stops the pipeline.** Tests run inside `package`. A failure fails
+Maven, Maven's exit code fails the build, and a failed Build stage never reaches
+Deploy.
+
+### 5.2 Scoping the roles
+
+"Scoped to these resources" needed evidence for the pipeline role, because
+Elastic Beanstalk performs part of a deploy with the caller's permissions, and
+the policy AWS's console attaches for this is `elasticbeanstalk:*`, `ec2:*`,
+`s3:*`, `cloudformation:*` and more on every resource.
+
+CloudTrail had the answer. It records what Elastic Beanstalk called on behalf of
+the caller during the `eb deploy` at 02:57 UTC, a real deploy of this
+environment:
+
+| Service | Calls made on the caller's behalf |
+|---------|-----------------------------------|
+| CloudFormation | `DescribeStacks`, `DescribeStackEvents`, `DescribeStackResource`, `DescribeStackResources`, `ListStackResources`, `GetTemplate` |
+| Auto Scaling | `DescribeAutoScalingGroups`, `DescribeScalingActivities`, `SuspendProcesses`, `ResumeProcesses` |
+| EC2 | `DescribeLaunchTemplates`, `DescribeLaunchTemplateVersions` |
+| S3 | `GetBucketLocation`, `GetBucketPolicy` on Elastic Beanstalk's own bucket |
+
+No stack update, no instance launch: deploying a new version to a running
+environment reads its stack, pauses scaling, and resumes it.
+
+[`pipeline/pipeline-role-policy.json`](pipeline/pipeline-role-policy.json) grants
+those calls and scopes each one as far as IAM allows:
+
+| Statement | Limited to |
+|-----------|------------|
+| Artifact objects | `cloudshop-pipeline/*` in the artifact bucket |
+| Use the GitHub connection | The one connection |
+| Start and read builds | The project `cloudshop-build` |
+| Create a version, update the environment, read events | Application `cloudshop`, its versions, environment `cloudshop-env` |
+| Elastic Beanstalk's storage | The bucket `elasticbeanstalk-us-east-1-<acct>` |
+| Read the stack | The environment's stack, `awseb-e-ymbnrtr5ck-stack` |
+| Suspend and resume scaling | The environment's scaling group, `awseb-e-ymbnrtr5ck-stack-*` |
+| Four `Describe` calls | `*`, because those actions do not accept a resource |
+
+[`pipeline/codebuild-role-policy.json`](pipeline/codebuild-role-policy.json) is
+shorter: write to its own log group, and read and write objects under
+`cloudshop-pipeline/*` in the artifact bucket.
+
+Both roles can be assumed only by their own service, and only from this account
+(`aws:SourceAccount`).
+
+### 5.3 CodeBuild works on this account
+
+New accounts are sometimes refused with `Cannot have more than 0 builds in queue`.
+To find out before depending on it, the project was run once on its own against
+the public repository, with no artifact:
+
+```
+aws codebuild start-build --project-name cloudshop-build \
+    --source-type-override GITHUB \
+    --source-location-override https://github.com/dimijimz/cst-323-cloudshop.git \
+    --source-version main --artifacts-override type=NO_ARTIFACTS
+```
+
+It ran, and succeeded in about 70 seconds from start to finish.
+
+| Phase | Seconds |
+|-------|:---:|
+| Provisioning | 4 |
+| Download source | 3 |
+| Build (`./mvnw -B clean package`) | 56 |
+
+From its log:
+
+```
+Selecting 'java' runtime version 'corretto17' based on manual selections...
+Running command chmod +x mvnw
+Running command ./mvnw -B clean package
+[INFO] Tests run: 151, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+[INFO] Total time:  48.946 s
+```
+
+So the GitHub Actions fallback is not needed.
+
+### 5.4 Waiting on the connection
+
+`aws codeconnections create-connection --provider-type GitHub --connection-name cloudshop-github`
+returns a connection in `PENDING`. Only a person signed in to both AWS and GitHub
+can complete it, in the console:
+
+1. Developer Tools, Settings, Connections
+   (`https://us-east-1.console.aws.amazon.com/codesuite/settings/connections?region=us-east-1`).
+2. Select `cloudshop-github`, then **Update pending connection**.
+3. In the window that opens, sign in to GitHub if asked and authorize
+   **AWS Connector for GitHub**.
+4. **Install a new app**, choose the account, **Only select repositories**,
+   pick `cst-323-cloudshop`, **Install**.
+5. Back in the AWS window, **Connect**. The status becomes `AVAILABLE`.
+
+The pipeline itself is created after that, so that its first execution is not a
+failed one.
