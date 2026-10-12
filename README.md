@@ -436,7 +436,7 @@ key, so deleting a product that has been sold would be refused by the database.
 ./mvnw test
 ```
 
-144 tests, no database or Docker needed. They run against H2 in MySQL mode, built
+151 tests, no database or Docker needed. They run against H2 in MySQL mode, built
 by Flyway from the real migrations.
 
 | Class | What it covers |
@@ -460,6 +460,7 @@ The logging has its own tests, in the `logging` test package:
 | `ErrorCodeTest` | Which exception maps to which code, and that the 400 handler and `ERR-VALIDATION` cover the same exceptions |
 | `ExceptionLogTest` | WARN or ERROR, and the once-only stack trace, including for an exception that wraps one already traced |
 | `LoggingConfigurationTest` | Console is the only appender, the pattern is the agreed one, the banner is off, and the level comes from `APP_LOG_LEVEL` |
+| `StartupLineTest` (root test package) | The start-up line names the database without ever repeating a credential, whatever form of JDBC URL the platform supplied |
 
 ## Design diagrams
 
@@ -525,7 +526,7 @@ cloudshop/
     │       ├── db/migration/               Flyway V1 schema, V2 seed
     │       ├── static/css/app.css
     │       └── templates/                  Thymeleaf views
-    └── test/                               144 tests, H2 in MySQL mode
+    └── test/                               151 tests, H2 in MySQL mode
 ```
 
 ## Deploying
