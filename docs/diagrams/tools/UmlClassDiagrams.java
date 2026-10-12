@@ -1,3 +1,5 @@
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
@@ -24,19 +26,22 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Writes the four UML class diagram sources (uml-models.puml, uml-controllers.puml,
- * uml-services.puml, uml-repositories.puml) from the compiled application classes.
+ * Writes the five UML class diagram sources (uml-models.puml, uml-controllers.puml,
+ * uml-services.puml, uml-repositories.puml, uml-logging.puml) from the compiled
+ * application classes.
  *
  * <p>The diagrams are generated rather than drawn by hand so they cannot drift from
  * the code: every field, constructor and method in them, with its visibility,
  * parameter names, parameter types and return type, is read by reflection from
- * target/classes. Rename a method and the next render shows the new name.
+ * target/classes. Rename a method and the next render shows the new name. The
+ * dashed "uses" arrows of the logging diagram are read from the class files too.
  *
  * <p>Not part of the application. render.sh runs it as a single-file program:
  * <pre>java docs/diagrams/tools/UmlClassDiagrams.java [project-root]</pre>
@@ -53,27 +58,40 @@ public class UmlClassDiagrams {
     /** Starts a continuation line of a wrapped signature: a PlantUML line break, then an indent. */
     private static final String CONTINUATION = "\\n" + " ".repeat(8);
 
+    /** An application type as a class file writes it inside a descriptor or a generic signature. */
+    private static final Pattern DESCRIBED_TYPE = Pattern.compile("L(" + BASE_PACKAGE.replace('.', '/') + "/[\\w/$]+);");
+
     /**
-     * One diagram: the package it documents, where it goes, whether its classes are
-     * stacked down the page with their collaborators beside them, and its legend notes.
+     * One diagram: the packages it documents, where it goes, whether its classes are
+     * stacked down the page with their collaborators beside them, whether it draws
+     * which class uses which as well as which holds which, and its legend notes.
      */
-    private record Diagram(String pkg, String file, String title, boolean leftToRight, List<String> notes) {
+    private record Diagram(List<String> packages, String file, String title, boolean leftToRight,
+                           boolean dependencies, List<String> notes) {
     }
 
     private static final List<Diagram> DIAGRAMS = List.of(
-            new Diagram("model", "uml-models", "Model Classes", false,
+            new Diagram(List.of("model"), "uml-models", "Model Classes", false, false,
                     List.of("JPA entities mapped to the users, products and purchases tables.",
                             "Purchase has no setters: a sale is a record and is never edited.")),
-            new Diagram("controller", "uml-controllers", "Controller Classes", true,
+            new Diagram(List.of("controller"), "uml-controllers", "Controller Classes", true, false,
                     List.of("A public method returning String returns a view name or a redirect.",
                             "Routes: see the Pages and routes table in README.md.")),
-            new Diagram("service", "uml-services", "Service Classes", true,
+            new Diagram(List.of("service"), "uml-services", "Service Classes", true, false,
                     List.of("PurchaseService.purchase runs the stock decrement and the",
                             "purchase insert in one transaction.")),
-            new Diagram("repository", "uml-repositories", "Repository Interfaces", true,
+            new Diagram(List.of("repository"), "uml-repositories", "Repository Interfaces", true, false,
                     List.of("Spring Data JPA implements these interfaces at runtime.",
                             "Inherited from JpaRepository and not repeated here:",
-                            "save, findById, findAll, count, delete, deleteAll, ...")));
+                            "save, findById, findAll, count, delete, deleteAll, ...")),
+            // The classes here hold no references to each other: they call static
+            // methods and test exception types, so only the dashed arrows connect them.
+            new Diagram(List.of("logging", "exception"), "uml-logging", "Logging and Error Handling", false, true,
+                    List.of("LoggingAspect wraps every public method of the controller, service and",
+                            "repository packages and writes the ENTER, EXIT and EXCEPTION lines.",
+                            "GlobalExceptionHandler writes the HANDLED line with the same error code.",
+                            "ERR-STOCK, ERR-NOTFOUND and ERR-VALIDATION are logged at WARN on one line;",
+                            "ERR-UNEXPECTED is logged at ERROR, with its stack trace once.")));
 
     private static Path root;
     private static ClassLoader loader;
@@ -123,7 +141,10 @@ public class UmlClassDiagrams {
     // --- rendering ----------------------------------------------------------
 
     private static String render(Diagram diagram) throws Exception {
-        List<Class<?>> classes = classesIn(diagram.pkg());
+        List<Class<?>> classes = new ArrayList<>();
+        for (String pkg : diagram.packages()) {
+            classes.addAll(classesIn(pkg));
+        }
         Set<Class<?>> inDiagram = new LinkedHashSet<>(classes);
 
         StringBuilder body = new StringBuilder();
@@ -132,7 +153,7 @@ public class UmlClassDiagrams {
 
         for (Class<?> type : classes) {
             body.append(declaration(type)).append('\n');
-            relations.addAll(relationsOf(type, inDiagram, collaborators));
+            relations.addAll(relationsOf(type, inDiagram, collaborators, diagram.dependencies()));
         }
 
         StringBuilder out = new StringBuilder();
@@ -162,7 +183,9 @@ public class UmlClassDiagrams {
         out.append("hide circle\n");
         out.append("hide <<external>> stereotype\n\n");
         out.append("title CloudShop - ").append(diagram.title())
-                .append("\\n<size:11>package ").append(BASE_PACKAGE).append('.').append(diagram.pkg()).append("</size>\n\n");
+                .append("\\n<size:11>").append(diagram.packages().size() == 1 ? "package " : "packages ")
+                .append(diagram.packages().stream().map(pkg -> BASE_PACKAGE + "." + pkg).collect(Collectors.joining(" and ")))
+                .append("</size>\n\n");
 
         out.append(body);
         collaborators.values().forEach(line -> out.append(line).append('\n'));
@@ -176,13 +199,16 @@ public class UmlClassDiagrams {
         if (!collaborators.isEmpty()) {
             out.append("    Grey boxes belong to another package or library and are detailed elsewhere.\n");
         }
+        if (diagram.dependencies()) {
+            out.append("    A dashed arrow points to a class that this one calls or tests for.\n");
+        }
         diagram.notes().forEach(note -> out.append("    ").append(note).append('\n'));
         out.append("endlegend\n@enduml\n");
         return out.toString();
     }
 
     /** One class, interface or enum with its three compartments: name, attributes, operations. */
-    private static String declaration(Class<?> type) throws IOException {
+    private static String declaration(Class<?> type) throws IOException, IllegalAccessException {
         String source = sourceOf(type);
         StringBuilder out = new StringBuilder();
 
@@ -195,16 +221,16 @@ public class UmlClassDiagrams {
         out.append(" {\n");
 
         // Attributes.
-        if (type.isEnum()) {
-            for (Object constant : type.getEnumConstants()) {
-                out.append("    ").append(((Enum<?>) constant).name()).append('\n');
-            }
-        }
         List<Field> fields = Arrays.stream(type.getDeclaredFields())
                 .filter(f -> !f.isSynthetic() && !f.isEnumConstant())
                 .filter(f -> !f.getType().getSimpleName().equals("Logger"))
                 .sorted(Comparator.comparingInt(f -> position(source, f.getName(), true)))
                 .toList();
+        if (type.isEnum()) {
+            for (Object constant : type.getEnumConstants()) {
+                out.append("    ").append(((Enum<?>) constant).name()).append(stateOf(constant, fields)).append('\n');
+            }
+        }
         for (Field field : fields) {
             out.append("    ").append(visibility(field.getModifiers())).append(' ')
                     .append(Modifier.isStatic(field.getModifiers()) ? "{static} " : "")
@@ -232,6 +258,23 @@ public class UmlClassDiagrams {
         }
         out.append("}\n");
         return out.toString();
+    }
+
+    /**
+     * What an enum constant holds in its fields, written the way its declaration
+     * reads in source: STOCK("ERR-STOCK", true). Empty for an enum with no fields.
+     */
+    private static String stateOf(Object constant, List<Field> fields) throws IllegalAccessException {
+        List<String> values = new ArrayList<>();
+        for (Field field : fields) {
+            if (Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+            field.setAccessible(true);
+            Object value = field.get(constant);
+            values.add(value instanceof String ? "\"" + value + "\"" : String.valueOf(value));
+        }
+        return values.isEmpty() ? "" : "(" + String.join(", ", values) + ")";
     }
 
     private static String signature(Executable operation) {
@@ -285,10 +328,13 @@ public class UmlClassDiagrams {
         return Modifier.isProtected(modifiers) ? "#" : "~";
     }
 
-    /** The Spring or JPA role of a class, shown as its UML stereotype. */
+    /**
+     * The role of a class, shown as its UML stereotype: its Spring, JPA or AspectJ
+     * annotation, or failing that what kind of class it is.
+     */
     private static String stereotypeOf(Class<?> type) {
         List<String> known = List.of("Entity", "Service", "RestController", "Controller", "Repository",
-                "ControllerAdvice", "Configuration", "Component");
+                "ControllerAdvice", "Configuration", "Aspect", "Component");
         Set<String> present = Arrays.stream(type.getAnnotations())
                 .map(a -> a.annotationType().getSimpleName()).collect(Collectors.toSet());
         String role = known.stream().filter(present::contains).findFirst().orElse("");
@@ -298,22 +344,48 @@ public class UmlClassDiagrams {
         if (type.isInterface()) {
             return role.isEmpty() ? "interface" : "interface, " + role;
         }
-        return role;
+        if (!role.isEmpty()) {
+            return role;
+        }
+        if (Throwable.class.isAssignableFrom(type)) {
+            return "exception";
+        }
+        return isUtility(type) ? "utility" : "";
+    }
+
+    /** A class that is never instantiated: final, its constructors private, its methods all static. */
+    private static boolean isUtility(Class<?> type) {
+        return Modifier.isFinal(type.getModifiers())
+                && Arrays.stream(type.getDeclaredConstructors()).allMatch(c -> Modifier.isPrivate(c.getModifiers()))
+                && Arrays.stream(type.getDeclaredMethods()).allMatch(m -> Modifier.isStatic(m.getModifiers()));
     }
 
     // --- relationships ------------------------------------------------------
 
-    private static List<String> relationsOf(Class<?> type, Set<Class<?>> inDiagram, Map<String, String> collaborators) {
+    private static List<String> relationsOf(Class<?> type, Set<Class<?>> inDiagram, Map<String, String> collaborators,
+                                            boolean dependencies) throws IOException, ClassNotFoundException {
         List<String> lines = new ArrayList<>();
         String self = type.getSimpleName();
+        Set<Class<?>> joined = new LinkedHashSet<>();   // already connected to this class by a line
 
         // Generalization and realization, including the generic arguments of JpaRepository<T, ID>.
+        Class<?> superclass = type.getSuperclass();
+        if (superclass != null && superclass != Object.class && superclass != Enum.class && superclass != Record.class) {
+            String label = name(type.getGenericSuperclass());
+            String alias = label.replaceAll("[^A-Za-z0-9]", "_");
+            if (!inDiagram.contains(superclass)) {
+                collaborators.putIfAbsent(alias, "class \"" + label + "\" as " + alias + " <<external>>\nhide " + alias + " members");
+            }
+            lines.add(alias + " <|-- " + self);
+            joined.add(superclass);
+        }
         for (Type parent : type.getGenericInterfaces()) {
             String label = name(parent);
             String alias = label.replaceAll("[^A-Za-z0-9]", "_");
             collaborators.putIfAbsent(alias, "interface \"" + label + "\" as " + alias + " <<external>>\nhide " + alias + " members");
             lines.add(alias + (type.isInterface() ? " <|-- " : " <|.. ") + self);
         }
+        joined.addAll(Arrays.asList(type.getInterfaces()));
 
         // Associations: one arrow per field whose type is an application class.
         for (Field field : type.getDeclaredFields()) {
@@ -333,8 +405,94 @@ public class UmlClassDiagrams {
             lines.add(manyToOne
                     ? self + " \"0..*\" --> \"1\" " + targetName + " : " + field.getName()
                     : self + " --> " + targetName + " : " + field.getName());
+            joined.add(target);
+        }
+
+        // Dependencies: one dashed arrow per application class this one calls or tests
+        // for without holding it in a field or inheriting from it.
+        if (dependencies) {
+            for (Class<?> used : usedBy(type)) {
+                if (used == type || joined.contains(used)) {
+                    continue;
+                }
+                String usedName = used.getSimpleName();
+                if (!inDiagram.contains(used)) {
+                    collaborators.putIfAbsent(usedName, "class " + usedName + " <<external>>\nhide " + usedName + " members");
+                }
+                lines.add(self + " ..> " + usedName);
+            }
         }
         return lines;
+    }
+
+    /**
+     * The application classes a class refers to anywhere in its code: in a call, a
+     * type test, an annotation, a signature or a field. They are read from the
+     * constant pools of its class file and of the classes nested in it, which
+     * between them name every class the compiled code mentions, so no dependency
+     * has to be declared here by hand.
+     */
+    private static List<Class<?>> usedBy(Class<?> type) throws IOException, ClassNotFoundException {
+        Path directory = root.resolve("target/classes").resolve(type.getPackageName().replace('.', '/'));
+        Set<String> names = new TreeSet<>();
+        try (Stream<Path> files = Files.list(directory)) {
+            for (Path file : files.sorted().toList()) {
+                String fileName = file.getFileName().toString();
+                if (fileName.equals(type.getSimpleName() + ".class") || fileName.startsWith(type.getSimpleName() + "$")) {
+                    names.addAll(classNamesIn(file));
+                }
+            }
+        }
+        List<Class<?>> used = new ArrayList<>();
+        for (String name : names) {
+            if (!name.contains("$")) {
+                used.add(Class.forName(name, false, loader));
+            }
+        }
+        used.sort(Comparator.comparing(Class::getSimpleName));
+        return used;
+    }
+
+    /**
+     * Every application class one class file names, whether as a class reference
+     * (a call, a cast, an instanceof, a catch) or inside a descriptor or signature.
+     */
+    private static Set<String> classNamesIn(Path classFile) throws IOException {
+        Set<String> names = new TreeSet<>();
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(classFile)))) {
+            in.skipBytes(8);   // the magic number and the two version numbers
+            int entries = in.readUnsignedShort();
+            String[] text = new String[entries];
+            List<Integer> classNames = new ArrayList<>();   // where in the pool each referenced class is named
+            for (int i = 1; i < entries; i++) {
+                int tag = in.readUnsignedByte();
+                switch (tag) {
+                    case 1 -> text[i] = in.readUTF();
+                    case 7 -> classNames.add(in.readUnsignedShort());
+                    case 8, 16, 19, 20 -> in.skipBytes(2);
+                    case 15 -> in.skipBytes(3);
+                    case 3, 4, 9, 10, 11, 12, 17, 18 -> in.skipBytes(4);
+                    case 5, 6 -> {
+                        in.skipBytes(8);
+                        i++;   // a long or a double takes up two entries
+                    }
+                    default -> throw new IllegalStateException("Unknown constant pool tag " + tag + " in " + classFile);
+                }
+            }
+            for (int index : classNames) {
+                String name = text[index].replace('/', '.');
+                if (name.startsWith(BASE_PACKAGE + ".")) {
+                    names.add(name);
+                }
+            }
+            for (String entry : text) {
+                Matcher described = DESCRIBED_TYPE.matcher(entry == null ? "" : entry);
+                while (described.find()) {
+                    names.add(described.group(1).replace('/', '.'));
+                }
+            }
+        }
+        return names;
     }
 
     // --- type names ---------------------------------------------------------
