@@ -1,6 +1,5 @@
 package edu.gcu.cst323.cloudshop.config;
 
-import edu.gcu.cst323.cloudshop.model.User;
 import edu.gcu.cst323.cloudshop.service.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,13 +70,19 @@ public class OwnerAccountInitializer implements ApplicationRunner {
             return;
         }
         try {
-            User owner = userService.createOwner(ownerUsername, ownerEmail, ownerPassword);
-            // The password is never logged, only the fact that the account now exists.
-            log.info("Created the owner account '{}' from OWNER_USERNAME / OWNER_PASSWORD", owner.getUsername());
-        } catch (IllegalStateException | DataIntegrityViolationException ex) {
-            // Reached when the name or address already belongs to a buyer, or when a
-            // second instance starting at the same moment created the owner first.
-            log.error("Could not create the owner account '{}': {}", ownerUsername.trim(), ex.getMessage());
+            // Neither the name nor the password is logged, only the fact that the
+            // account now exists; UserService records that with the new account's id.
+            userService.createOwner(ownerUsername, ownerEmail, ownerPassword);
+            log.info("The owner account was created from OWNER_USERNAME and OWNER_PASSWORD");
+        } catch (IllegalStateException ex) {
+            // The name or address already belongs to a buyer. The message is the
+            // service's own and names neither.
+            log.error("Could not create the owner account: {}", ex.getMessage());
+        } catch (DataIntegrityViolationException ex) {
+            // A second instance starting at the same moment created the owner first.
+            // The database's message is not repeated here: it quotes the duplicate value.
+            log.error("Could not create the owner account: the database refused it as a duplicate, "
+                    + "most likely because another instance created the owner at the same moment");
         }
     }
 }

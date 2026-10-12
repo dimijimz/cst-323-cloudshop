@@ -64,6 +64,13 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- AspectJ-style advice for LoggingAspect, the interceptor that traces every
+             controller, service and repository call -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
         <!-- Schema versioning: keeps the database reproducible on every cloud target -->
         <dependency>
             <groupId>org.flywaydb</groupId>

@@ -5,9 +5,11 @@
 #   ./docs/deploy/smoke-test.sh <base-url>
 #   ./docs/deploy/smoke-test.sh https://dxxxxxxxxxxxxx.cloudfront.net
 #   ./docs/deploy/smoke-test.sh http://localhost:8080
+#   SECRETS_FILE=~/.cloudshop/heroku-secrets.env ./docs/deploy/smoke-test.sh https://<app>.herokuapp.com
 #
 # What it does, in order:
-#   1. checks /health and /actuator/health
+#   1. checks /health and /actuator/health, reads the catalog, and checks that an
+#      unknown product answers 404 and a malformed product id answers 400
 #   2. registers a throwaway buyer (smoke_<timestamp>) and signs in as them
 #   3. buys one unit of whichever product has the most stock
 #   4. confirms the purchase is in the buyer's history and the stock dropped by one
@@ -18,6 +20,11 @@
 #
 # What it leaves behind: one buyer account and one purchase, so one product has one
 # unit less stock. The price is restored.
+#
+# With APP_LOG_LEVEL=DEBUG on the server, one run puts ENTER and EXIT lines for
+# every layer in its log, and EXCEPTION lines for three of the four error codes:
+# ERR-NOTFOUND and ERR-VALIDATION from the catalog checks, ERR-STOCK from the
+# oversized order.
 #
 # Owner credentials are never typed here or printed. They are read from the
 # OWNER_USERNAME and OWNER_PASSWORD environment variables if both are set, and
@@ -129,6 +136,9 @@ ok "chose product $PRODUCT_ID: $PRODUCT_NAME, $PRICE_SHOWN, $STOCK_BEFORE in sto
 body_has 'name="quantity"' && fail "an anonymous visitor is not offered the purchase form" \
                            || ok "an anonymous visitor is not offered the purchase form"
 check "anonymous /owner/sales is sent to sign in" "$(get anon /owner/sales)" "302 */login"
+# These two also put an ERR-NOTFOUND and an ERR-VALIDATION line in the server's log.
+check "a product id that does not exist answers 404" "$(get anon /products/999999999)" "404 *"
+check "letters where a product id belongs answer 400" "$(get anon /products/not-a-number)" "400 *"
 
 # --- 3. Register a buyer and sign in --------------------------------------------
 echo

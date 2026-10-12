@@ -22,6 +22,7 @@ builds itself with Flyway, and logs go to the console.
 - [Environment variables](#environment-variables)
 - [How a purchase works](#how-a-purchase-works)
 - [Security](#security)
+- [Logging](#logging)
 - [Database and migrations](#database-and-migrations)
 - [Tests](#tests)
 - [Design diagrams](#design-diagrams)
@@ -42,7 +43,7 @@ builds itself with Flyway, and logs go to the console.
 | Data       | Spring Data JPA / Hibernate                             |
 | Database   | MySQL 8 (8.0.16 or newer)                               |
 | Migrations | Flyway                                                  |
-| Logging    | SLF4J over Logback, console only                        |
+| Logging    | SLF4J over Logback, console only; a Spring AOP interceptor traces every call |
 | Health     | Spring Boot Actuator + a plain `/health`                |
 | Tests      | JUnit 5, MockMvc, H2 in MySQL mode                      |
 
@@ -229,7 +230,7 @@ from an environment variable, defined in `src/main/resources/application.propert
 | `DB_NAME` | `cloudshopdb` | Schema name |
 | `DB_USER` | `cloudshop_app` | Database user |
 | `DB_PASSWORD` | **none - required** | Database password. No fallback; unset fails at startup |
-| `DB_SSL_MODE` | `DISABLED` | `REQUIRED` for managed MySQL such as Azure |
+| `DB_SSL_MODE` | `DISABLED` | `REQUIRED` for a managed MySQL such as Amazon RDS |
 | `OWNER_USERNAME` | **none** | Sign-in name for the single owner account |
 | `OWNER_PASSWORD` | **none** | Password for the owner account. Stored only as a BCrypt hash |
 | `OWNER_EMAIL` | `owner@cloudshop.local` | Email for the owner row (the column is required and unique) |
@@ -240,7 +241,7 @@ from an environment variable, defined in `src/main/resources/application.propert
 | `FLYWAY_ENABLED` | `true` | Set `false` if migrations are run separately |
 | `FLYWAY_BASELINE_ON_MIGRATE` | `false` | `true` only to adopt a pre-Flyway database |
 | `FLYWAY_LOG_LEVEL` | `INFO` | INFO logs which migrations ran |
-| `APP_LOG_LEVEL` | `INFO` | Level for this application's own loggers |
+| `APP_LOG_LEVEL` | `INFO` | Level for this application's own loggers. `DEBUG` adds an ENTER and EXIT line for every call - see [Logging](#logging) |
 | `JPA_SHOW_SQL` | `false` | Echo generated SQL, for debugging only |
 | `THYMELEAF_CACHE` | `true` | Template caching |
 
@@ -297,6 +298,117 @@ is why changing a product's price later leaves past purchases exactly as they we
 - **Hidden links are not the access control** - the nav bar only shows what your
   role can use, but the server enforces the same rules on every request.
 
+## Logging
+
+Everything is logged to the console (stdout) and nowhere else, one line per event:
+
+```
+2026-10-11T18:22:05.123Z DEBUG [http-nio-5000-exec-3] e.g.c.c.service.PurchaseService - ENTER PurchaseService.purchase(username=<String>, productId=3, quantity=1)
+```
+
+The pattern is `%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] %logger{36} - %msg%n`,
+set in `logback-spring.xml`. The Spring Boot start-up banner is switched off, so
+every line on stdout has that shape. Cloud platforms collect stdout themselves:
+Elastic Beanstalk into `/var/log/web.stdout.log`, Heroku into its log stream and on
+to any log drain.
+
+### The interceptor
+
+`LoggingAspect`, in the `logging` package, is a Spring AOP `@Around` advice on every
+public method in the `controller`, `service` and `repository` packages, so no class
+in those layers logs its own entry and exit. Each call writes, through the logger
+of the class that was called:
+
+| Line | Level |
+|------|-------|
+| `ENTER ClassName.method(args)` | DEBUG |
+| `EXIT ClassName.method -> result [N ms]` | DEBUG |
+| `EXCEPTION ClassName.method [CODE] Type: message` | WARN for an expected business exception; ERROR with the stack trace for anything else |
+
+A call ends in EXIT or in EXCEPTION, never both.
+
+**The repositories needed care.** They are interfaces, and the beans behind them
+are proxy classes that Spring Data generates in a JDK package. A pointcut written
+as `within(...repository..*)` therefore matches nothing at all, silently. The
+aspect uses `within(...repository..*+)`: the `+` adds subtypes, and the proxy is
+one because it implements the interface. `LoggingAspectTest` proves it three ways:
+the advice is on each repository bean, it matches every public method including
+inherited ones such as `save` and `findById`, and the same pointcut without the
+`+` stops matching.
+
+### Error codes
+
+| Code | Meaning | Level |
+|------|---------|-------|
+| `ERR-STOCK` | `InsufficientStockException`: more units were asked for than are left | WARN |
+| `ERR-NOTFOUND` | `ResourceNotFoundException`, and an unknown username at sign-in | WARN |
+| `ERR-VALIDATION` | A binding or validation failure: a rejected form, letters where an id belongs | WARN |
+| `ERR-UNEXPECTED` | Everything else | ERROR, with the stack trace |
+
+The same codes appear on the two other kinds of line the application writes about
+a failure. `GlobalExceptionHandler` logs how it answered, and a controller logs a
+form it redisplayed:
+
+```
+HANDLED 404 GET /products/{id} [ERR-NOTFOUND] ResourceNotFoundException: Product 999 was not found
+REJECTED POST /register [ERR-VALIDATION] 2 validation error(s) on [confirmPassword, email]
+```
+
+**A stack trace is written once**, where the exception is first seen. A database
+failure is seen in turn by the repository, the service, the controller and the
+exception handler; each logs one line, and only the repository's carries the
+trace. `GlobalExceptionHandler` answers every unexpected exception itself with a
+500 page, so the servlet container never prints a second copy.
+
+### What is never logged
+
+- **Argument values**, unless they are numbers, booleans, enums or dates. Anything
+  else is logged as its type: `username=<String>`, `form=<RegistrationForm>`. The
+  rule goes by type, not by parameter name, so a password is safe whatever its
+  parameter is called.
+- **Results.** Only the type, with the size for a collection: `<List size=8>`,
+  `<Optional empty>`, `<boolean>`.
+- **Usernames, email addresses, passwords and password hashes.** Business events
+  and the application's own exception messages refer to accounts and products by id.
+- **A value that failed validation.** The field or parameter is named; what was
+  sent is not. Spring's own message for these failures repeats the value, so it is
+  replaced.
+- **The address that was requested.** A route is logged as its pattern,
+  `/products/{id}`.
+
+`SensitiveDataLoggingTest` runs every flow that touches a password, a username or
+an email with the log at its most verbose, then searches both the log events and
+the real console output for those values.
+
+One limit remains: the message of an *unexpected* exception raised by a library
+is logged as the library wrote it, because that is what makes the fault
+diagnosable. A database error can quote a row value. The realistic case is two
+sign-ups for the same username at the same instant, where the duplicate-key
+message names the duplicate.
+
+### Levels
+
+`APP_LOG_LEVEL` sets the level of the application's own loggers.
+
+- **`INFO`** (the default): business events from the service layer, plus every
+  exception line.
+
+  ```
+  Purchase completed: purchaseId=12 buyerId=5 productId=3 quantity=1 unitPrice=79.99 total=79.99 stockLeft=24
+  Product created: productId=9 price=27.50 stock=15
+  Price changed: productId=9 oldPrice=27.50 newPrice=29.00
+  ```
+
+  Also `Product updated`, `Product deactivated`, `Product reactivated`,
+  `Buyer registered` and `Owner account created`, all by id.
+- **`DEBUG`**: adds the ENTER and EXIT lines. Roughly six lines per page view, so
+  it is for diagnosing, not for leaving on.
+
+Other loggers stay at WARN, apart from Spring and Flyway at INFO.
+
+Not built, deliberately: correlation ids, JSON output, and shipping logs to a
+collector from inside the application.
+
 ## Database and migrations
 
 Flyway owns the schema; Hibernate is set to `validate` and never alters tables.
@@ -324,7 +436,7 @@ key, so deleting a product that has been sold would be refused by the database.
 ./mvnw test
 ```
 
-99 tests, no database or Docker needed. They run against H2 in MySQL mode, built
+144 tests, no database or Docker needed. They run against H2 in MySQL mode, built
 by Flyway from the real migrations.
 
 | Class | What it covers |
@@ -336,6 +448,18 @@ by Flyway from the real migrations.
 | `ShopFlowTest` | Every page rendered through MockMvc: catalog, purchase and confirmation, history, inventory, sales |
 | `SchemaMigrationTest` | Both migrations apply; eight products and no accounts; each CHECK, UNIQUE and FOREIGN KEY constraint rejects bad data |
 | `DdlExportSyncTest` | `docs/ddl` still matches the migrations |
+
+The logging has its own tests, in the `logging` test package:
+
+| Class | What it covers |
+|-------|----------------|
+| `LoggingAspectTest` | **ENTER, EXIT and EXCEPTION lines** in their exact formats, at the right level, through the right logger, for all three layers; the **repository proxies are advised** on every public method; arguments masked by type; each error code; the INFO business events; the line pattern on stdout |
+| `SensitiveDataLoggingTest` | **No password**, password hash, username or email reaches the log events or the console, across sign-up, sign-in, owner creation and a purchase, with the log at TRACE |
+| `UnexpectedExceptionLoggingTest` | A real database failure crosses repository, service, controller and handler over HTTP: one ERROR line each, **the stack trace once**, and a 500 page with no detail on it |
+| `LogValuesTest` | What may be said about a value, case by case, including that a binding failure never repeats the rejected value |
+| `ErrorCodeTest` | Which exception maps to which code, and that the 400 handler and `ERR-VALIDATION` cover the same exceptions |
+| `ExceptionLogTest` | WARN or ERROR, and the once-only stack trace, including for an exception that wraps one already traced |
+| `LoggingConfigurationTest` | Console is the only appender, the pattern is the agreed one, the banner is off, and the level comes from `APP_LOG_LEVEL` |
 
 ## Design diagrams
 
@@ -389,18 +513,19 @@ cloudshop/
     │   │   ├── exception/     InsufficientStockException, ResourceNotFoundException,
     │   │   │                  GlobalExceptionHandler
     │   │   ├── form/          RegistrationForm, ProductForm, PurchaseForm
+    │   │   ├── logging/       LoggingAspect, ErrorCode, LogValues, ExceptionLog
     │   │   ├── model/         User, Role, Product, Purchase
     │   │   ├── repository/    UserRepository, ProductRepository, PurchaseRepository
     │   │   └── service/       UserService, ProductService, PurchaseService
     │   └── resources/
     │       ├── application.properties      all config externalized
     │       ├── application-h2.properties   the no-MySQL profile
-    │       ├── logback-spring.xml          console-only logging
+    │       ├── logback-spring.xml          console-only logging and the line pattern
     │       ├── messages.properties         friendlier form-conversion errors
     │       ├── db/migration/               Flyway V1 schema, V2 seed
     │       ├── static/css/app.css
     │       └── templates/                  Thymeleaf views
-    └── test/                               99 tests, H2 in MySQL mode
+    └── test/                               144 tests, H2 in MySQL mode
 ```
 
 ## Deploying

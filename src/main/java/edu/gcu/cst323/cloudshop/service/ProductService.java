@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -17,7 +18,8 @@ import java.util.List;
  * <p>Two views of the same table. The catalog methods only ever return active
  * products, so a deactivated product cannot be reached from a public page; the
  * inventory methods return everything. Every change is logged at INFO to stdout,
- * which is what the cloud platforms' log collectors read.
+ * which is what the cloud platforms' log collectors read; entry, exit and
+ * exceptions are logged for it by {@code LoggingAspect}.
  */
 @Service
 @Transactional(readOnly = true)
@@ -91,8 +93,8 @@ public class ProductService {
                 form.getDescription().trim(),
                 form.getPrice(),
                 form.getStock()));
-        log.info("CREATE product: id={} name={} price={} stock={}",
-                saved.getId(), saved.getName(), saved.getPrice(), saved.getStock());
+        log.info("Product created: productId={} price={} stock={}",
+                saved.getId(), saved.getPrice(), saved.getStock());
         return saved;
     }
 
@@ -108,12 +110,18 @@ public class ProductService {
     @Transactional
     public Product update(Long id, ProductForm form) {
         Product product = findById(id);
+        BigDecimal oldPrice = product.getPrice();
         product.setName(form.getName().trim());
         product.setDescription(form.getDescription().trim());
         product.setPrice(form.getPrice());
         product.setStock(form.getStock());
-        log.info("UPDATE product: id={} name={} price={} stock={}",
-                product.getId(), product.getName(), product.getPrice(), product.getStock());
+        log.info("Product updated: productId={} price={} stock={}",
+                product.getId(), product.getPrice(), product.getStock());
+        // compareTo, not equals: 79.9 and 79.90 are the same price.
+        if (oldPrice.compareTo(product.getPrice()) != 0) {
+            log.info("Price changed: productId={} oldPrice={} newPrice={}",
+                    product.getId(), oldPrice, product.getPrice());
+        }
         return product;
     }
 
@@ -145,7 +153,7 @@ public class ProductService {
     private Product setActive(Long id, boolean active) {
         Product product = findById(id);
         product.setActive(active);
-        log.info("UPDATE product: id={} name={} active={}", product.getId(), product.getName(), active);
+        log.info("Product {}: productId={}", active ? "reactivated" : "deactivated", product.getId());
         return product;
     }
 }

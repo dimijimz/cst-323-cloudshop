@@ -1,6 +1,8 @@
 package edu.gcu.cst323.cloudshop.controller;
 
 import edu.gcu.cst323.cloudshop.form.PurchaseForm;
+import edu.gcu.cst323.cloudshop.logging.ErrorCode;
+import edu.gcu.cst323.cloudshop.logging.LogValues;
 import edu.gcu.cst323.cloudshop.model.Purchase;
 import edu.gcu.cst323.cloudshop.service.ProductService;
 import edu.gcu.cst323.cloudshop.service.PurchaseService;
@@ -72,7 +74,8 @@ public class PurchaseController {
                            Model model,
                            RedirectAttributes redirectAttributes) {
         if (binding.hasErrors()) {
-            log.warn("POST /products/{}/purchase - rejected with {} validation error(s)", id, binding.getErrorCount());
+            log.warn("REJECTED POST /products/{id}/purchase [{}] {} (id={})",
+                    ErrorCode.VALIDATION.label(), LogValues.fieldErrors(binding), id);
             model.addAttribute("product", productService.findActiveById(id));
             return "products/detail";
         }
@@ -95,7 +98,6 @@ public class PurchaseController {
      */
     @GetMapping("/my-purchases")
     public String myPurchases(Principal principal, Model model) {
-        log.info("GET /my-purchases - listing purchases for {}", principal.getName());
         List<Purchase> purchases = purchaseService.findForBuyer(principal.getName());
         model.addAttribute("purchases", purchases);
         model.addAttribute("totalSpent", purchaseService.totalRevenue(purchases));

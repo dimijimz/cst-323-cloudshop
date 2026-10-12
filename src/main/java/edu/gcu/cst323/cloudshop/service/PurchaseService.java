@@ -85,12 +85,15 @@ public class PurchaseService {
             throw new InsufficientStockException(product.getId(), product.getName(), quantity, product.getStock());
         }
 
+        // The message is shown on the 404 page and written to the log, so it does
+        // not repeat the name that was looked up.
         User buyer = userRepository.findByUsernameIgnoreCase(username)
-                .orElseThrow(() -> new ResourceNotFoundException("No account named " + username));
+                .orElseThrow(() -> new ResourceNotFoundException("The signed-in account was not found"));
 
         Purchase saved = purchaseRepository.save(new Purchase(buyer, product, quantity, product.getPrice()));
-        log.info("CREATE purchase: id={} buyer={} product={} quantity={} unitPrice={} total={} stockLeft={}",
-                saved.getId(), buyer.getUsername(), product.getName(), quantity,
+        // Ids, not names: the log identifies who bought what without holding personal data.
+        log.info("Purchase completed: purchaseId={} buyerId={} productId={} quantity={} unitPrice={} total={} stockLeft={}",
+                saved.getId(), buyer.getId(), product.getId(), quantity,
                 saved.getUnitPrice(), saved.getTotalPrice(), product.getStock());
         return saved;
     }

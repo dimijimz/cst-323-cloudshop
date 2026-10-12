@@ -1,9 +1,13 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<!--
-  Spring Boot resolves this automatically for any unhandled error status, and
-  GlobalExceptionHandler renders it directly for a missing product.
--->
+<!--/*
+  Spring Boot resolves this automatically for any error status it answers itself,
+  and GlobalExceptionHandler renders it directly for a missing product, an unusable
+  request value and an unexpected failure.
+
+  This is a Thymeleaf parser-level comment, so it is removed when the page is
+  rendered: an error page should not name the classes behind it.
+*/-->
 <head th:replace="~{fragments/layout :: head('Error')}"></head>
 <body class="bg-body-tertiary">
 

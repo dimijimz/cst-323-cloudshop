@@ -3,8 +3,6 @@ package edu.gcu.cst323.cloudshop.controller;
 import edu.gcu.cst323.cloudshop.model.Purchase;
 import edu.gcu.cst323.cloudshop.service.ProductService;
 import edu.gcu.cst323.cloudshop.service.PurchaseService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -22,8 +20,6 @@ import java.util.List;
 @Controller
 @RequestMapping("/owner/sales")
 public class SalesController {
-
-    private static final Logger log = LoggerFactory.getLogger(SalesController.class);
 
     private final PurchaseService purchaseService;
     private final ProductService productService;
@@ -58,8 +54,6 @@ public class SalesController {
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                         Model model) {
-        log.info("GET /owner/sales - productId={} from={} to={}", productId, from, to);
-
         boolean invalidRange = from != null && to != null && from.isAfter(to);
         List<Purchase> sales = invalidRange ? List.of() : purchaseService.findSales(productId, from, to);
 

@@ -1,6 +1,8 @@
 package edu.gcu.cst323.cloudshop.controller;
 
 import edu.gcu.cst323.cloudshop.form.ProductForm;
+import edu.gcu.cst323.cloudshop.logging.ErrorCode;
+import edu.gcu.cst323.cloudshop.logging.LogValues;
 import edu.gcu.cst323.cloudshop.model.Product;
 import edu.gcu.cst323.cloudshop.service.ProductService;
 import jakarta.validation.Valid;
@@ -49,7 +51,6 @@ public class OwnerProductController {
      */
     @GetMapping
     public String list(Model model) {
-        log.info("GET /owner/products - listing inventory");
         model.addAttribute("products", productService.findAll());
         return "owner/products";
     }
@@ -82,7 +83,8 @@ public class OwnerProductController {
                          Model model,
                          RedirectAttributes redirectAttributes) {
         if (binding.hasErrors()) {
-            log.warn("POST /owner/products - create rejected with {} validation error(s)", binding.getErrorCount());
+            log.warn("REJECTED POST /owner/products [{}] {}",
+                    ErrorCode.VALIDATION.label(), LogValues.fieldErrors(binding));
             populateForm(model, "Add Product", "/owner/products");
             return "owner/product-form";
         }
@@ -122,7 +124,8 @@ public class OwnerProductController {
                          Model model,
                          RedirectAttributes redirectAttributes) {
         if (binding.hasErrors()) {
-            log.warn("POST /owner/products/{} - update rejected with {} validation error(s)", id, binding.getErrorCount());
+            log.warn("REJECTED POST /owner/products/{id} [{}] {} (id={})",
+                    ErrorCode.VALIDATION.label(), LogValues.fieldErrors(binding), id);
             populateForm(model, "Edit Product", "/owner/products/" + id);
             return "owner/product-form";
         }

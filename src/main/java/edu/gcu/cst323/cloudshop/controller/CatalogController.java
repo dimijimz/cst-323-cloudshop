@@ -2,8 +2,6 @@ package edu.gcu.cst323.cloudshop.controller;
 
 import edu.gcu.cst323.cloudshop.form.PurchaseForm;
 import edu.gcu.cst323.cloudshop.service.ProductService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,8 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @Controller
 @RequestMapping("/products")
 public class CatalogController {
-
-    private static final Logger log = LoggerFactory.getLogger(CatalogController.class);
 
     private final ProductService productService;
 
@@ -42,7 +38,6 @@ public class CatalogController {
      */
     @GetMapping
     public String list(Model model) {
-        log.info("GET /products - listing catalog");
         model.addAttribute("products", productService.findCatalog());
         return "products/list";
     }
@@ -56,7 +51,6 @@ public class CatalogController {
      */
     @GetMapping("/{id}")
     public String detail(@PathVariable Long id, Model model) {
-        log.info("GET /products/{} - rendering detail view", id);
         model.addAttribute("product", productService.findActiveById(id));
         model.addAttribute("purchaseForm", new PurchaseForm());
         return "products/detail";

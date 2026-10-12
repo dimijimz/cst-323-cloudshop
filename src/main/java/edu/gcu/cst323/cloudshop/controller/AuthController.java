@@ -1,6 +1,8 @@
 package edu.gcu.cst323.cloudshop.controller;
 
 import edu.gcu.cst323.cloudshop.form.RegistrationForm;
+import edu.gcu.cst323.cloudshop.logging.ErrorCode;
+import edu.gcu.cst323.cloudshop.logging.LogValues;
 import edu.gcu.cst323.cloudshop.service.UserService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -76,7 +78,8 @@ public class AuthController {
         rejectDuplicates(form, binding);
 
         if (binding.hasErrors()) {
-            log.warn("POST /register - rejected with {} validation error(s)", binding.getErrorCount());
+            // Field names only: what was typed into them includes a password.
+            log.warn("REJECTED POST /register [{}] {}", ErrorCode.VALIDATION.label(), LogValues.fieldErrors(binding));
             return "auth/register";
         }
 
@@ -85,7 +88,8 @@ public class AuthController {
         } catch (DataIntegrityViolationException ex) {
             // Two sign-ups for the same name at the same instant: both passed the
             // check above, and the unique constraint stopped the second one.
-            log.warn("POST /register - lost a race on the unique constraints for username={}", form.getUsername());
+            log.warn("REJECTED POST /register [{}] the username or email was taken by a sign-up made at the same moment",
+                    ErrorCode.VALIDATION.label());
             binding.rejectValue("username", "username.taken", "That username or email was just taken");
             return "auth/register";
         }

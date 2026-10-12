@@ -2,11 +2,19 @@
 <!--
   Logback configuration for the SLF4J logging used throughout the application.
 
-  Everything goes to the console on purpose. Writing to a local file is the wrong
-  default for a cloud application: instances are disposable and their filesystems
-  are not durable. Azure App Service, Heroku, container platforms and PaaS log
-  collectors all read stdout, so console output is the one destination that works
-  unchanged on every target.
+  Everything goes to the console (stdout) on purpose, and nowhere else. Writing to a
+  local file is the wrong default for a cloud application: instances are disposable
+  and their filesystems are not durable. Elastic Beanstalk collects stdout into
+  /var/log/web.stdout.log, Heroku's Logplex reads it and forwards it to any log
+  drain, and container platforms do the same, so console output is the one
+  destination that works unchanged on every target.
+
+  One line per event, starting with an ISO-8601 timestamp that carries its UTC
+  offset, so lines from different platforms can be put in order without knowing each
+  server's time zone. A stack trace, when there is one, follows its line.
+
+  Levels are not set here. application.properties sets them, and reads this
+  application's own level from the APP_LOG_LEVEL environment variable (default INFO).
 -->
 <configuration>
 
@@ -14,13 +22,10 @@
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] %logger{36} - %msg%n</pattern>
             <charset>UTF-8</charset>
         </encoder>
     </appender>
-
-    <!-- Registrations, purchases and inventory changes: the shop's audit trail. -->
-    <logger name="edu.gcu.cst323.cloudshop" level="INFO"/>
 
     <root level="WARN">
         <appender-ref ref="CONSOLE"/>

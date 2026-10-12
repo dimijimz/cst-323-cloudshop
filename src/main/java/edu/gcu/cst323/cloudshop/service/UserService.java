@@ -25,6 +25,8 @@ import java.util.Locale;
  * {@code SecurityConfig}, so no authentication provider has to be wired by hand.
  *
  * <p>Passwords arrive here in plain text, are hashed once, and are never logged.
+ * Neither are usernames or email addresses: the log lines and the exception
+ * messages written here refer to an account by its id or not at all.
  */
 @Service
 @Transactional(readOnly = true)
@@ -55,8 +57,10 @@ public class UserService implements UserDetailsService {
      */
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        // The message is logged, so it does not repeat what was typed: people type
+        // their password into the username box often enough for that to matter.
         User user = userRepository.findByUsernameIgnoreCase(username == null ? "" : username.trim())
-                .orElseThrow(() -> new UsernameNotFoundException("No account named " + username));
+                .orElseThrow(() -> new UsernameNotFoundException("No account has that username"));
 
         // The stored spelling becomes the principal name, so later lookups by
         // principal match the row exactly however the name was typed at login.
@@ -81,7 +85,7 @@ public class UserService implements UserDetailsService {
                 normalizeEmail(form.getEmail()),
                 passwordEncoder.encode(form.getPassword()),
                 Role.BUYER));
-        log.info("CREATE user: id={} username={} role={}", saved.getId(), saved.getUsername(), saved.getRole());
+        log.info("Buyer registered: userId={}", saved.getId());
         return saved;
     }
 
@@ -102,17 +106,17 @@ public class UserService implements UserDetailsService {
             throw new IllegalStateException("An owner account already exists; the shop has exactly one");
         }
         if (usernameTaken(username)) {
-            throw new IllegalStateException("The username '" + username.trim() + "' is already taken by another account");
+            throw new IllegalStateException("The owner username is already taken by another account");
         }
         if (emailTaken(email)) {
-            throw new IllegalStateException("The email '" + normalizeEmail(email) + "' is already taken by another account");
+            throw new IllegalStateException("The owner email is already taken by another account");
         }
         User saved = userRepository.save(new User(
                 username.trim(),
                 normalizeEmail(email),
                 passwordEncoder.encode(rawPassword),
                 Role.OWNER));
-        log.info("CREATE user: id={} username={} role={}", saved.getId(), saved.getUsername(), saved.getRole());
+        log.info("Owner account created: userId={}", saved.getId());
         return saved;
     }
 
@@ -155,7 +159,7 @@ public class UserService implements UserDetailsService {
      */
     public User findByUsername(String username) {
         return userRepository.findByUsernameIgnoreCase(username)
-                .orElseThrow(() -> new ResourceNotFoundException("No account named " + username));
+                .orElseThrow(() -> new ResourceNotFoundException("No account has that username"));
     }
 
     private static String normalizeEmail(String email) {
