@@ -1,7 +1,9 @@
 # CloudShop
 
-An online shop built for **CST-323 Cloud Computing**, Milestone 3. Each user signs
-in either as a **buyer** or as the **shop owner**.
+An online shop built for **CST-323 Cloud Computing**: the Milestone 3 application,
+with the Milestone 4 [DevOps](#devops) work around it (logging, monitoring and a
+deployment pipeline). Each user signs in either as a **buyer** or as the **shop
+owner**.
 
 - **Buyers** register themselves, browse the catalog, buy products that are in
   stock, and see their own purchase history.
@@ -28,6 +30,7 @@ builds itself with Flyway, and logs go to the console.
 - [Design diagrams](#design-diagrams)
 - [Project layout](#project-layout)
 - [Deploying](#deploying)
+- [DevOps](#devops)
 - [Known limitations](#known-limitations)
 
 ## Tech stack
@@ -327,6 +330,18 @@ of the class that was called:
 
 A call ends in EXIT or in EXCEPTION, never both.
 
+**Every class in the three layers is covered**: the seven controllers, the three
+services and the three repositories, on every public method, including the ones a
+repository inherits from Spring Data. `LoggingCoverageTest` finds the classes by
+scanning the three packages, so a class added later is checked without being
+listed, and it fails if a class carries no advice or a public method is missed.
+
+One kind of call is not traced on its own: a class calling one of its *own* public
+methods. Spring AOP intercepts a call that arrives through the bean's proxy, and a
+call on `this` does not. `ProductService.update` reading the product through its
+own `findById` therefore shows as one ENTER and one EXIT for `update`, with the
+repository's lines between them.
+
 **The repositories needed care.** They are interfaces, and the beans behind them
 are proxy classes that Spring Data generates in a JDK package. A pointcut written
 as `within(...repository..*)` therefore matches nothing at all, silently. The
@@ -436,7 +451,7 @@ key, so deleting a product that has been sold would be refused by the database.
 ./mvnw test
 ```
 
-151 tests, no database or Docker needed. They run against H2 in MySQL mode, built
+154 tests, no database or Docker needed. They run against H2 in MySQL mode, built
 by Flyway from the real migrations.
 
 | Class | What it covers |
@@ -454,6 +469,7 @@ The logging has its own tests, in the `logging` test package:
 | Class | What it covers |
 |-------|----------------|
 | `LoggingAspectTest` | **ENTER, EXIT and EXCEPTION lines** in their exact formats, at the right level, through the right logger, for all three layers; the **repository proxies are advised** on every public method; arguments masked by type; each error code; the INFO business events; the line pattern on stdout |
+| `LoggingCoverageTest` | **Every class** in the controller, service and repository packages, found by scanning them, is a bean that carries the advice, and the advice matches **every public method** of each, inherited ones included |
 | `SensitiveDataLoggingTest` | **No password**, password hash, username or email reaches the log events or the console, across sign-up, sign-in, owner creation and a purchase, with the log at TRACE |
 | `UnexpectedExceptionLoggingTest` | A real database failure crosses repository, service, controller and handler over HTTP: one ERROR line each, **the stack trace once**, and a 500 page with no detail on it |
 | `LogValuesTest` | What may be said about a value, case by case, including that a binding failure never repeats the rejected value |
@@ -475,6 +491,7 @@ In [`docs/diagrams`](docs/diagrams), as PNG with the PlantUML source beside each
 | [`uml-controllers.png`](docs/diagrams/uml-controllers.png) | UML class diagram of `controller` |
 | [`uml-services.png`](docs/diagrams/uml-services.png) | UML class diagram of `service` |
 | [`uml-repositories.png`](docs/diagrams/uml-repositories.png) | UML class diagram of `repository` |
+| [`uml-logging.png`](docs/diagrams/uml-logging.png) | UML class diagram of `logging` and `exception`: the interceptor, the error codes, the exception handler and the two custom exceptions |
 
 To regenerate them all:
 
@@ -484,9 +501,22 @@ To regenerate them all:
 
 It needs only a JDK. PlantUML is fetched from Maven Central into `target/`, and the
 diagrams use PlantUML's built-in `smetana` layout, so Graphviz is not required. The
-four UML class diagrams are **generated from the compiled classes** by
+five UML class diagrams are **generated from the compiled classes** by
 `docs/diagrams/tools/UmlClassDiagrams.java`, so their fields, parameters and return
-types always match the code; re-run the script after changing a class.
+types always match the code; re-run the script after changing a class. The dashed
+"uses" arrows of the logging diagram are read from the class files as well.
+
+[`docs/design/milestone4`](docs/design/milestone4) holds the five class diagrams
+as the Milestone 4 design report uses them, each about 1500 pixels wide. They are
+written by the same script:
+
+```bash
+./docs/diagrams/render.sh --export docs/design/milestone4
+```
+
+The model, controller, service and repository diagrams are the same as in
+Milestone 3. The logging was put around those classes by an aspect, not written
+into them, so nothing the diagrams draw has changed. `uml-logging` is new.
 
 ## Project layout
 
@@ -502,6 +532,7 @@ cloudshop/
 ├── docs/
 │   ├── ddl/                        schema.sql and seed.sql, exported from the migrations
 │   ├── deploy/                     deployment logs, pipeline definitions, Heroku config script, smoke test
+│   ├── design/milestone4/          the five UML class diagrams, exported for the Milestone 4 report
 │   └── diagrams/                   design-report diagrams, sources and render script
 └── src/
     ├── main/
@@ -527,7 +558,7 @@ cloudshop/
     │       ├── db/migration/               Flyway V1 schema, V2 seed
     │       ├── static/css/app.css
     │       └── templates/                  Thymeleaf views
-    └── test/                               151 tests, H2 in MySQL mode
+    └── test/                               154 tests, H2 in MySQL mode
 ```
 
 ## Deploying
@@ -561,23 +592,8 @@ deploy artifact, are in `.elasticbeanstalk/config.yml`.
 redeploy that added the logging interceptor, with `APP_LOG_LEVEL=DEBUG` and the
 lines it put in `/var/log/web.stdout.log`.
 
-**Continuous deployment.** A push to `main` deploys itself to the AWS environment
-through AWS CodePipeline, `cloudshop-pipeline`:
-
-1. **Source** - GitHub, through an AWS CodeConnections connection.
-2. **Build** - AWS CodeBuild runs [`buildspec.yml`](buildspec.yml): Corretto 17 and
-   `./mvnw -B clean package`, tests included. A failing test fails the build, and
-   the pipeline stops there.
-3. **Deploy** - Elastic Beanstalk, application `cloudshop`, environment
-   `cloudshop-env`.
-
-The build's only artifact is the executable jar, at the root of the bundle, which
-is what the Java SE platform runs. The `Procfile` in this repository is Heroku's
-and is deliberately not sent. A whole run takes about two minutes. The
-definitions the pipeline, its build project and its two service roles were created
-from are in [`docs/deploy/pipeline`](docs/deploy/pipeline), and section 5 of the
-[Activity 6 log](docs/deploy/activity6-log.md) records how it was set up, including
-how the roles were scoped.
+**Continuous deployment.** A push to `main` now deploys itself to this environment
+through AWS CodePipeline; see [Deployment pipeline](#deployment-pipeline).
 
 To check a running deployment end to end - register, buy, stock, owner sign-in,
 price change, sales history - run:
@@ -621,6 +637,108 @@ For the smoke test, point it at the Heroku secrets file:
 ```bash
 SECRETS_FILE=~/.cloudshop/heroku-secrets.env ./docs/deploy/smoke-test.sh https://<app>.herokuapp.com
 ```
+
+## DevOps
+
+Milestone 4 put three things around the application without changing what it
+does: a log that shows what the code is doing, monitors that show whether the two
+sites are up, and a pipeline that carries a push to the running AWS site.
+
+| | AWS | Heroku |
+|---|-----|--------|
+| Site | https://d2m8eu1qwn32t4.cloudfront.net | https://cst323-cloudshop-dj-debe1645cf87.herokuapp.com |
+| Deployed by | `cloudshop-pipeline`, on every push to `main` | `git push heroku main`, by hand |
+| Logs | `/var/log/web.stdout.log` on the instance | `heroku logs`, and Loggly through a log drain |
+| Monitor | Uptime Robot, every 5 minutes | Uptime Robot, every 5 minutes |
+
+### Reading the logs
+
+[Logging](#logging) describes the design. In short:
+
+- **Format.** One line per event on stdout, `timestamp LEVEL [thread] logger - message`:
+
+  ```
+  2026-10-12T00:57:36.816Z DEBUG [http-nio-5000-exec-3] e.g.c.c.service.ProductService - ENTER ProductService.findCatalog()
+  2026-10-12T00:57:36.859Z DEBUG [http-nio-5000-exec-3] e.g.c.c.service.ProductService - EXIT ProductService.findCatalog -> <List size=7> [42 ms]
+  2026-10-12T00:57:37.902Z WARN  [http-nio-5000-exec-5] e.g.c.c.service.ProductService - EXCEPTION ProductService.findActiveById [ERR-NOTFOUND] ResourceNotFoundException: Product 999999999 was not found
+  ```
+
+- **Levels.** ENTER and EXIT are DEBUG, written for every public method of every
+  controller, service and repository. Business events such as
+  `Purchase completed` are INFO. An exception is WARN when it is an expected
+  outcome (`ERR-STOCK`, `ERR-NOTFOUND`, `ERR-VALIDATION`) and ERROR with one stack
+  trace when it is not (`ERR-UNEXPECTED`).
+- **`APP_LOG_LEVEL`** chooses how much of that is written. It defaults to `INFO`;
+  both deployments are set to `DEBUG`. Changing it restarts the application:
+
+  ```bash
+  eb setenv APP_LOG_LEVEL=INFO
+  heroku config:set APP_LOG_LEVEL=INFO --app cst323-cloudshop-dj
+  ```
+
+- **On AWS** Elastic Beanstalk writes the application's stdout to
+  `/var/log/web.stdout.log` on the instance, each line behind the system log's own
+  prefix (`Oct 12 00:57:36 ip-... web[364254]:`). `eb logs --all` downloads it, or
+  in the console: Elastic Beanstalk, environment `cloudshop-env`, **Logs**,
+  **Request logs**, then **Last 100 lines** or **Full**.
+- **On Heroku** `heroku logs --tail --app cst323-cloudshop-dj` follows the log
+  live. The application's lines are marked `app[web.1]`, and Heroku's router adds
+  one line per request. Heroku keeps only the most recent 1,500 lines, so a log
+  drain also sends every line to Loggly, tagged `cst323_logfile_heroku_upload`,
+  where they can be searched, for example for `ERR-STOCK`. The drain's address
+  holds the Loggly account token, so it is not written anywhere in this
+  repository; `heroku drains` shows it.
+
+### Uptime monitoring
+
+[Uptime Robot](https://uptimerobot.com) checks both sites from outside every 5
+minutes and sends an email alert when one stops answering:
+
+| Monitor | Address checked |
+|---------|-----------------|
+| AWS | https://d2m8eu1qwn32t4.cloudfront.net |
+| Heroku | https://cst323-cloudshop-dj-debe1645cf87.herokuapp.com |
+
+Each check is a `HEAD` request for the home page. The shop opens its public pages
+to `GET` only, so it answers a `HEAD` with a redirect to `/login`, and the login
+page answers 200: the monitor reports the site up. When the application is not
+running, the platform answers 503 itself and the check fails. That was tried on
+2026-10-12 by scaling the Heroku dyno to zero: the next check got Heroku's `H14`
+error, "No web processes running".
+
+A check of that kind shows that the application is serving pages. Two endpoints
+say more to anything that sends a `GET`: `/health` answers while the process is
+up, and `/actuator/health` reports `UP` only while the database answers too.
+
+### Deployment pipeline
+
+Every push to `main` on GitHub starts `cloudshop-pipeline` (AWS CodePipeline) by
+itself, and about two minutes later the change is live on the AWS site:
+
+1. **Source** - takes the commit from GitHub through an AWS CodeConnections
+   connection, `cloudshop-github-app`.
+2. **Build** - the AWS CodeBuild project `cloudshop-build` runs
+   [`buildspec.yml`](buildspec.yml): Corretto 17 and `./mvnw -B clean package`,
+   tests included. A failing test fails the build, and the pipeline stops there
+   with the previous version still running.
+3. **Deploy** - gives the jar to Elastic Beanstalk, application `cloudshop`,
+   environment `cloudshop-env`.
+
+The build's only artifact is the executable jar, at the root of the bundle, which
+is what the Java SE platform runs. The `Procfile` in this repository is Heroku's
+and is deliberately not sent. The definitions the pipeline, its build project and
+its two service roles were created from are in
+[`docs/deploy/pipeline`](docs/deploy/pipeline), and section 5 of the
+[Activity 6 log](docs/deploy/activity6-log.md) records how it was set up,
+including how the roles were scoped.
+
+The footer of every page says the site was deployed by the pipeline. That line is
+in `src/main/resources/templates/fragments/layout.html`, and editing it is the
+quickest way to watch a push go through all three stages.
+
+Heroku is outside the pipeline. It is deployed by hand with `git push heroku main`
+and, as of Milestone 4, still runs the Activity 6 build (commit `3a99083`), so its
+pages do not carry that footer line.
 
 ## Known limitations
 
