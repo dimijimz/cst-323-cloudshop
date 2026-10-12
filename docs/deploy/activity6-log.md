@@ -14,9 +14,9 @@ Three parts:
 
 | Part | State |
 |------|-------|
-| 1. Logging with an interceptor | Done. 144 tests pass; committed and pushed |
-| 2. AWS redeploy | Not started |
-| 3. Heroku and Loggly | Not started. Blocked: no Heroku CLI on this machine |
+| 1. Logging with an interceptor | Done. 144 tests pass; committed as `a04a980` and pushed |
+| 2. AWS redeploy | Deployed and Green on `cloudshop-1.0.0-a04a980` with `APP_LOG_LEVEL=DEBUG`. ENTER, EXIT and EXCEPTION lines confirmed in `/var/log/web.stdout.log`. The signed-in smoke test is left for the operator (3.4) |
+| 3. Heroku and Loggly | Not started. Blocked: no Heroku CLI on this machine (4.1) |
 
 ## Ground rules
 
@@ -253,3 +253,169 @@ depend on DEBUG. With the banner off, every line of that log matched the pattern
 - The four UML class diagrams were regenerated and came out identical, so they are
   still accurate: the generator does not draw logger fields, and no method or
   field in `controller`, `service`, `repository` or `model` changed.
+
+## 3. Part 2: AWS redeploy (2026-10-11 evening; 00:55 UTC on the 12th)
+
+### 3.1 Before
+
+| Resource | State |
+|----------|-------|
+| Elastic Beanstalk `cloudshop-env` | Ready, Green, version `cloudshop-1.0.0-0c20f11` |
+| RDS `cloudshop-db` | available, MySQL 8.4.9, `db.t3.micro`, not public |
+| CloudFront `E39LB8FY296PK2` | Deployed, enabled |
+| Site | `/health`, `/actuator/health` and `/products` all 200 |
+
+### 3.2 Commands
+
+```
+eb setenv APP_LOG_LEVEL=DEBUG -e cloudshop-env
+./mvnw clean package
+eb deploy cloudshop-env --label cloudshop-1.0.0-a04a980 --message "Activity 6: logging aspect, APP_LOG_LEVEL=DEBUG"
+```
+
+| Step | Result (times in UTC) |
+|------|-----------------------|
+| `eb setenv` | 00:55:46 update started; 00:56:47 `Successfully deployed new configuration to environment` |
+| `./mvnw clean package` | 144 tests, `BUILD SUCCESS`; `target/cloudshop.jar` is the build of commit `a04a980` |
+| `eb deploy` | 00:56:59 update started; 00:57:14 `Instance deployment completed successfully`; 00:57:20 `Environment update completed successfully` |
+| Health | Yellow for under a minute while the application restarted, then Green: `Application update completed ... and took 18 seconds` |
+
+The EB CLI also printed `Alert: The platform version that your environment is using
+isn't recommended. There's a recommended version in the same platform branch.` The
+environment is on `64bit Amazon Linux 2023 v4.12.9 running Corretto 17`. It was
+left there: a platform upgrade is not part of this activity.
+
+No application code or migration changed for the platform. The only configuration
+change is the one environment variable.
+
+### 3.3 Checked without signing in, through CloudFront
+
+| Request | Status |
+|---------|:---:|
+| `GET /health` | 200 |
+| `GET /actuator/health` | 200 |
+| `GET /products` | 200 |
+| `GET /products/1` | 200 |
+| `GET /products/999999999` | 404, page says `Product 999999999 was not found` |
+| `GET /products/not-a-number` | 400, page says the value could not be used and does not repeat it |
+
+Then `eb logs --all` downloaded the instance's logs, and
+`/var/log/web.stdout.log` was read from the bundle.
+
+Start-up after the redeploy, as logged (the RDS host is masked here):
+
+```
+2026-10-12T00:57:21.566Z INFO  [main] org.flywaydb.core.FlywayExecutor - Database: jdbc:mysql://<rds-endpoint>/cloudshop?sslMode=REQUIRED&... (MySQL 8.4)
+2026-10-12T00:57:21.758Z INFO  [main] o.f.core.internal.command.DbValidate - Successfully validated 2 migrations (execution time 00:00.103s)
+2026-10-12T00:57:21.799Z INFO  [main] o.f.core.internal.command.DbMigrate - Current version of schema `cloudshop`: 2
+2026-10-12T00:57:21.804Z INFO  [main] o.f.core.internal.command.DbMigrate - Schema `cloudshop` is up to date. No migration necessary.
+2026-10-12T00:57:28.936Z INFO  [main] e.g.c.c.c.OwnerAccountInitializer - Owner account already exists; OWNER_USERNAME and OWNER_PASSWORD were not applied
+```
+
+**ENTER, EXIT and EXCEPTION lines are in `/var/log/web.stdout.log`.** From the six
+requests above and the start-up: 18 `ENTER`, 14 `EXIT`, 4 `EXCEPTION`, 4 `HANDLED`.
+By code: `ERR-NOTFOUND` 6, `ERR-VALIDATION` 2. (The missing-product and
+malformed-id requests were each made twice.)
+
+The platform puts its own prefix in front of each line:
+
+```
+Oct 12 00:57:36 ip-<private> web[364254]: 2026-10-12T00:57:36.816Z DEBUG [http-nio-5000-exec-3] ...
+```
+
+The catalog request, with that prefix removed:
+
+```
+2026-10-12T00:57:36.816Z DEBUG [http-nio-5000-exec-3] e.g.c.c.controller.CatalogController - ENTER CatalogController.list(model=<Model>)
+2026-10-12T00:57:36.816Z DEBUG [http-nio-5000-exec-3] e.g.c.c.service.ProductService - ENTER ProductService.findCatalog()
+2026-10-12T00:57:36.823Z DEBUG [http-nio-5000-exec-3] e.g.c.c.repository.ProductRepository - ENTER ProductRepository.findByActiveTrueOrderByNameAsc()
+2026-10-12T00:57:36.855Z DEBUG [http-nio-5000-exec-3] e.g.c.c.repository.ProductRepository - EXIT ProductRepository.findByActiveTrueOrderByNameAsc -> <List size=7> [31 ms]
+2026-10-12T00:57:36.859Z DEBUG [http-nio-5000-exec-3] e.g.c.c.service.ProductService - EXIT ProductService.findCatalog -> <List size=7> [42 ms]
+2026-10-12T00:57:36.860Z DEBUG [http-nio-5000-exec-3] e.g.c.c.controller.CatalogController - EXIT CatalogController.list -> <String> [43 ms]
+```
+
+The missing product:
+
+```
+2026-10-12T00:57:37.885Z DEBUG [http-nio-5000-exec-5] e.g.c.c.controller.CatalogController - ENTER CatalogController.detail(id=999999999, model=<Model>)
+2026-10-12T00:57:37.886Z DEBUG [http-nio-5000-exec-5] e.g.c.c.service.ProductService - ENTER ProductService.findActiveById(id=999999999)
+2026-10-12T00:57:37.888Z DEBUG [http-nio-5000-exec-5] e.g.c.c.repository.ProductRepository - ENTER ProductRepository.findByIdAndActiveTrue(id=999999999)
+2026-10-12T00:57:37.893Z DEBUG [http-nio-5000-exec-5] e.g.c.c.repository.ProductRepository - EXIT ProductRepository.findByIdAndActiveTrue -> <Optional empty> [4 ms]
+2026-10-12T00:57:37.902Z WARN  [http-nio-5000-exec-5] e.g.c.c.service.ProductService - EXCEPTION ProductService.findActiveById [ERR-NOTFOUND] ResourceNotFoundException: Product 999999999 was not found
+2026-10-12T00:57:37.902Z WARN  [http-nio-5000-exec-5] e.g.c.c.controller.CatalogController - EXCEPTION CatalogController.detail [ERR-NOTFOUND] ResourceNotFoundException: Product 999999999 was not found
+2026-10-12T00:57:37.908Z WARN  [http-nio-5000-exec-5] e.g.c.c.e.GlobalExceptionHandler - HANDLED 404 GET /products/{id} [ERR-NOTFOUND] ResourceNotFoundException: Product 999999999 was not found
+```
+
+The malformed id:
+
+```
+2026-10-12T00:57:38.080Z WARN  [http-nio-5000-exec-6] e.g.c.c.e.GlobalExceptionHandler - HANDLED 400 GET /products/{id} [ERR-VALIDATION] MethodArgumentTypeMismatchException: parameter 'id' could not be converted to Long
+```
+
+The catalog holds seven products, not the eight that were seeded, so one has been
+deactivated through the owner's inventory page since the first deployment.
+
+Searched for in the downloaded log and found 0 times each: the owner password, the
+database password, a BCrypt hash, and any email address among the new lines. The
+downloaded bundle was deleted afterwards; `.elasticbeanstalk/logs/` is ignored by
+git in any case.
+
+### 3.4 Smoke test: left for the operator
+
+`docs/deploy/smoke-test.sh` registers an account and signs in with the owner's
+password. As with the first deployment, the assistant doing this work does not
+create accounts on, or sign in to, a site that is not running on the local
+machine, so it has not run the script against the deployment; it ran it against
+the same build locally (2.8). To run it against AWS, from Git Bash in the
+repository:
+
+```
+./docs/deploy/smoke-test.sh https://d2m8eu1qwn32t4.cloudfront.net
+```
+
+It reads the owner's password from `~/.cloudshop/aws-secrets.env` and prints
+neither it nor the buyer's. With `APP_LOG_LEVEL=DEBUG` the run adds `ERR-STOCK`
+lines to the log, along with the sign-in, purchase and price-change traces.
+
+`APP_LOG_LEVEL` is still `DEBUG` on the environment. To put it back:
+
+```
+eb setenv APP_LOG_LEVEL=INFO -e cloudshop-env
+```
+
+### 3.5 Cost
+
+Unchanged by this part: the same instance and database as before, about
+$0.87 a day from the Free-plan credits (see `aws-deployment-log.md`, section 9).
+DEBUG logging adds lines to a file on the instance's existing disk, which the
+platform rotates.
+
+## 4. Part 3: Heroku and Loggly
+
+### 4.1 Preflight: blocked
+
+`heroku auth:whoami` could not be run, because there is no `heroku` command on
+this machine:
+
+| Looked in | Found |
+|-----------|-------|
+| The machine and user `PATH` as registered in Windows | Node.js and npm only |
+| `Program Files`, `Program Files (x86)`, `%LOCALAPPDATA%`, `%APPDATA%\npm` | No Heroku CLI |
+| Global npm packages | No `heroku` |
+| WSL (Ubuntu) | No `heroku` |
+| `%USERPROFILE%\_netrc` and `.netrc`, where `heroku login` stores the sign-in | Neither exists |
+
+Nothing was created on Heroku. Part 3 resumes when the CLI is installed and
+`heroku login` has been run.
+
+### 4.2 What was looked up in the meantime
+
+| Question | Answer | Source |
+|----------|--------|--------|
+| Is there a free MySQL plan? | Yes: JawsDB **Kitefin Shared**, free. 5 MB of storage, 10 connections, 3,600 queries an hour | Heroku Elements, JawsDB page; Heroku Dev Center, JawsDB article |
+| What does a Basic dyno cost? | About $0.01 an hour, at most $7 a month, prorated to the second. Scaled to 0 it accrues nothing | Heroku Dev Center, Usage and Billing |
+| And Eco? | A flat $5 for the month, charged in full whenever in the month it is started | Same |
+| `JAWSDB_URL` format | `mysql://username:password@hostname:port/default_schema` | Heroku Dev Center, JawsDB article |
+
+Planned from that, not yet done: `DB_POOL_MAX=4`, so that the old and the new dyno
+can overlap during a restart (2 x 4 = 8) and still stay under the cap of 10.

@@ -499,7 +499,7 @@ cloudshop/
 ├── .elasticbeanstalk/config.yml    EB CLI settings: application, region, jar artifact
 ├── docs/
 │   ├── ddl/                        schema.sql and seed.sql, exported from the migrations
-│   ├── deploy/                     AWS deployment log and the end-to-end smoke test
+│   ├── deploy/                     deployment logs and the end-to-end smoke test
 │   └── diagrams/                   design-report diagrams, sources and render script
 └── src/
     ├── main/
@@ -554,6 +554,10 @@ for MySQL 8.4 and CloudFront in front for HTTPS.
 command by command, with what it found along the way, what it costs to leave
 running, and how to tear it down. The EB CLI settings, including the jar as the
 deploy artifact, are in `.elasticbeanstalk/config.yml`.
+
+[`docs/deploy/activity6-log.md`](docs/deploy/activity6-log.md) records the later
+redeploy that added the logging interceptor, with `APP_LOG_LEVEL=DEBUG` and the
+lines it put in `/var/log/web.stdout.log`.
 
 To check a running deployment end to end - register, buy, stock, owner sign-in,
 price change, sales history - run:
