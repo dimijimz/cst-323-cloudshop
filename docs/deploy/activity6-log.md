@@ -17,7 +17,7 @@ Three parts:
 | 1. Logging with an interceptor | Done. Committed as `a04a980` and pushed. A later fix to the start-up line, `3a99083`, brought the tests to 151 (4.6) |
 | 2. AWS redeploy | Deployed and Green with `APP_LOG_LEVEL=DEBUG`, now on `cloudshop-1.0.0-3a99083`. ENTER, EXIT and EXCEPTION lines confirmed in `/var/log/web.stdout.log`. The signed-in smoke test is left for the operator (3.4) |
 | 3. Heroku and Loggly | Live at `https://cst323-cloudshop-dj-debe1645cf87.herokuapp.com` on a Basic dyno with JawsDB's free plan. Flyway applied V1 and V2; ENTER, EXIT and EXCEPTION lines confirmed in `heroku logs`. **The first start logged the database password** (4.6): fixed, and the password has since been changed (4.11). The smoke tests and the Loggly drain are left for the operator (4.9) |
-| 4. CI/CD pipeline (added later) | `cloudshop-pipeline` exists and all three stages succeed: it built, tested and deployed the footer change, which is live through CloudFront. **It does not yet start by itself on a push**; the GitHub connection was authorized without the app installation that delivers push events (5.7) |
+| 4. CI/CD pipeline (added later) | Done. A push to `main` starts `cloudshop-pipeline` by itself: Source, Build with the tests, Deploy to `cloudshop-env`, about two minutes end to end (5.9). The footer line it deployed is live through CloudFront |
 
 ## Ground rules
 
@@ -979,3 +979,67 @@ the one that could not deliver pushes.
 
 The commit that adds this section is the test: it is pushed with nothing started
 by hand, and 5.9 records what the pipeline did with it.
+
+### 5.9 A push now deploys itself
+
+Commit `5ef1649` was pushed at 15:35:58 UTC. Four seconds later the pipeline had
+started on its own:
+
+```
+trigger   WebhookV2
+detail    {"repositoryId": "dimijimz/cst-323-cloudshop", "branchName": "main",
+           "commitId": "5ef164931ff41ed722fe9b2195e95a79d086a708", "type": "PUSH_BRANCH"}
+```
+
+| Stage | Result | Time |
+|-------|--------|------|
+| Source | Succeeded | 5 s |
+| Build | Succeeded | 1 min 20 s |
+| Deploy | Succeeded | 36 s |
+| **Whole run** | **Succeeded** | **2 min 2 s** |
+
+From `git push` to the new build serving requests: 2 minutes 7 seconds.
+Afterwards the environment was Ready and Green, `/actuator/health` answered 200
+through CloudFront, and the footer line was still on the page.
+
+The pipeline's history at that point, oldest first:
+
+| Started by | Commit | Result |
+|------------|--------|--------|
+| `CreatePipeline` | `65cd0dc` | Succeeded, after the Deploy stage was retried with the missing permission added (5.5) |
+| `StartPipelineExecution`, by hand | `c34e25b`, the footer | Succeeded (5.6) |
+| `WebhookV2`, the push itself | `5ef1649` | Succeeded |
+
+Console: `https://us-east-1.console.aws.amazon.com/codesuite/codepipeline/pipelines/cloudshop-pipeline/view?region=us-east-1`
+
+### 5.10 What it costs
+
+| Item | Rate | One run |
+|------|------|---------|
+| CodeBuild, `BUILD_GENERAL1_SMALL` | $0.005 a minute, each build rounded up to a whole minute | A build takes 66 to 85 s, so 2 minutes: $0.010 |
+| CodePipeline, type V2 | $0.002 an action-minute, each action rounded up | Source 1, Build 2, Deploy 1: 4 minutes, $0.008 |
+| S3, the artifact bucket | $0.023 a GB-month | About 61 MB kept per run: $0.0014 a month for each run kept |
+| Build log, CloudWatch Logs | Free at this volume; kept 14 days | |
+| Connection, roles, the idle pipeline and build project | Free | |
+
+**About 2 cents a run.** Both services have a free allowance that resets each
+month and does not end after the first year: 100 build minutes for CodeBuild and
+100 action-minutes for CodePipeline V2. That is roughly the first 25 runs of a
+month. Nothing in the pipeline bills while it is idle; a V2 pipeline has no
+monthly fee.
+
+Used when this was written: 4 builds (8 build minutes) and 14 action-minutes.
+
+Two things to know:
+
+- **Every push to `main` now redeploys the AWS site**, documentation-only pushes
+  included. A deploy restarts the application, which on one instance is a few
+  seconds of 502s.
+- **The bucket has no expiry rule on purpose** (5.5). Old artifacts can be deleted
+  by hand, except the one behind the version that is live.
+
+To stop deployments without removing anything:
+`aws codepipeline disable-stage-transition --pipeline-name cloudshop-pipeline --stage-name Deploy --transition-type Inbound --reason "paused"`.
+
+To remove it all: delete the pipeline, the build project, the bucket's contents
+and then the bucket, the log group, the two roles and the connection.

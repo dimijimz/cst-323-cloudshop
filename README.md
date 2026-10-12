@@ -573,7 +573,7 @@ through AWS CodePipeline, `cloudshop-pipeline`:
 
 The build's only artifact is the executable jar, at the root of the bundle, which
 is what the Java SE platform runs. The `Procfile` in this repository is Heroku's
-and is deliberately not sent. A whole run takes about two and a half minutes. The
+and is deliberately not sent. A whole run takes about two minutes. The
 definitions the pipeline, its build project and its two service roles were created
 from are in [`docs/deploy/pipeline`](docs/deploy/pipeline), and section 5 of the
 [Activity 6 log](docs/deploy/activity6-log.md) records how it was set up, including
