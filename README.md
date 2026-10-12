@@ -570,13 +570,47 @@ price change, sales history - run:
 It reads the owner's credentials from `OWNER_USERNAME` and `OWNER_PASSWORD`, or from
 the secrets file written at deployment time, and never prints them.
 
+### Heroku
+
+The second deployment was to Heroku: one Basic dyno and the JawsDB MySQL add-on on
+its free plan. The same source, with no change for the platform.
+[`docs/deploy/activity6-log.md`](docs/deploy/activity6-log.md) records it.
+
+```bash
+heroku create <app>
+heroku addons:create jawsdb:kitefin --app <app>
+./docs/deploy/heroku-config.sh <app>
+git push heroku main
+```
+
+`Procfile` starts the jar and `system.properties` selects Java 17.
+[`heroku-config.sh`](docs/deploy/heroku-config.sh) sets the config vars: it splits
+JawsDB's single `JAWSDB_URL` into the five `DB_*` variables, generates the owner
+password into a file outside the repository, and prints names only.
+
+**One Heroku setting is not optional: `DISABLE_SPRING_DATASOURCE_URL=true`.**
+Heroku's Java buildpack reads `JAWSDB_URL` as well, and by default exports its own
+`SPRING_DATASOURCE_URL`, which outranks `application.properties`. Without the
+switch the `DB_*` variables are silently ignored, the connection is made without
+`sslMode=REQUIRED`, and the URL in use carries the database user and password in
+its query string. The script sets the switch. The first deployment here ran
+without it and logged the database password once; the log records what happened
+and what was changed.
+
+For the smoke test, point it at the Heroku secrets file:
+
+```bash
+SECRETS_FILE=~/.cloudshop/heroku-secrets.env ./docs/deploy/smoke-test.sh https://<app>.herokuapp.com
+```
+
 ## Known limitations
 
 - **Real MySQL is only exercised in the cloud.** Docker Desktop is broken on the
   development machine, so locally the migrations only ever run on H2 in MySQL
   compatibility mode, which is not MySQL. MySQL itself first ran them on
   2026-10-05, on Amazon RDS for MySQL 8.4.9, where V1 and V2 both applied unchanged
-  (see [`docs/deploy/aws-deployment-log.md`](docs/deploy/aws-deployment-log.md)).
+  (see [`docs/deploy/aws-deployment-log.md`](docs/deploy/aws-deployment-log.md)),
+  and again a week later on JawsDB's MySQL 8.4 on Heroku.
   A new migration still gets its first real test at its first deployment, so keep
   to plain, portable DDL. `docker-compose.yml` has not been run at all.
 - **CHECK constraints need MySQL 8.0.16+.** Older versions accept and ignore them.
