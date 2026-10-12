@@ -1,0 +1,113 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PassArtifactsBetweenStages",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::<artifact-bucket>/cloudshop-pipeline/*"
+    },
+    {
+      "Sid": "FindTheArtifactBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:GetBucketAcl",
+        "s3:GetBucketVersioning",
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::<artifact-bucket>"
+    },
+    {
+      "Sid": "ReadTheRepositoryThroughTheConnection",
+      "Effect": "Allow",
+      "Action": [
+        "codeconnections:UseConnection",
+        "codestar-connections:UseConnection"
+      ],
+      "Resource": [
+        "arn:aws:codeconnections:us-east-1:<acct>:connection/<connection-id>",
+        "arn:aws:codestar-connections:us-east-1:<acct>:connection/<connection-id>"
+      ]
+    },
+    {
+      "Sid": "RunTheBuildProject",
+      "Effect": "Allow",
+      "Action": [
+        "codebuild:StartBuild",
+        "codebuild:BatchGetBuilds"
+      ],
+      "Resource": "arn:aws:codebuild:us-east-1:<acct>:project/cloudshop-build"
+    },
+    {
+      "Sid": "DeployAVersionToTheOneEnvironment",
+      "Effect": "Allow",
+      "Action": [
+        "elasticbeanstalk:CreateApplicationVersion",
+        "elasticbeanstalk:DescribeApplicationVersions",
+        "elasticbeanstalk:DescribeEnvironments",
+        "elasticbeanstalk:DescribeEvents",
+        "elasticbeanstalk:UpdateEnvironment"
+      ],
+      "Resource": [
+        "arn:aws:elasticbeanstalk:us-east-1:<acct>:application/cloudshop",
+        "arn:aws:elasticbeanstalk:us-east-1:<acct>:applicationversion/cloudshop/*",
+        "arn:aws:elasticbeanstalk:us-east-1:<acct>:environment/cloudshop/cloudshop-env"
+      ]
+    },
+    {
+      "Sid": "ElasticBeanstalkStorageForTheVersion",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectAcl",
+        "s3:PutObject",
+        "s3:PutObjectAcl",
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:GetBucketPolicy"
+      ],
+      "Resource": [
+        "arn:aws:s3:::elasticbeanstalk-us-east-1-<acct>",
+        "arn:aws:s3:::elasticbeanstalk-us-east-1-<acct>/*"
+      ]
+    },
+    {
+      "Sid": "WhatElasticBeanstalkReadsAboutTheEnvironmentWhileDeploying",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResource",
+        "cloudformation:DescribeStackResources",
+        "cloudformation:ListStackResources",
+        "cloudformation:GetTemplate"
+      ],
+      "Resource": "arn:aws:cloudformation:us-east-1:<acct>:stack/awseb-e-ymbnrtr5ck-stack/*"
+    },
+    {
+      "Sid": "DescribeCallsThatCannotBeScopedToAResource",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeScalingActivities",
+        "ec2:DescribeLaunchTemplates",
+        "ec2:DescribeLaunchTemplateVersions"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PauseAndResumeScalingOnTheEnvironmentsGroupDuringADeploy",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:SuspendProcesses",
+        "autoscaling:ResumeProcesses"
+      ],
+      "Resource": "arn:aws:autoscaling:us-east-1:<acct>:autoScalingGroup:*:autoScalingGroupName/awseb-e-ymbnrtr5ck-stack-*"
+    }
+  ]
+}

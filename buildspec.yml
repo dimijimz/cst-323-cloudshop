@@ -1,0 +1,44 @@
+# Build instructions for AWS CodeBuild, the Build stage of cloudshop-pipeline.
+#
+# The pipeline hands this a copy of the repository at the commit that was pushed,
+# and takes back one file: the executable jar. That jar is the whole of what
+# Elastic Beanstalk receives.
+#
+# Tests run as part of `package`. A failing test fails Maven, Maven's exit code
+# fails this build, and a failed build stops the pipeline before the Deploy stage,
+# so nothing that does not pass the tests reaches the environment.
+
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      # Amazon Corretto 17: the same JDK family the Elastic Beanstalk platform runs
+      # the jar on, and the release pom.xml compiles to.
+      java: corretto17
+  build:
+    commands:
+      # The source arrives as a zip, which does not reliably keep the executable
+      # bit the wrapper was committed with.
+      - chmod +x mvnw
+      - ./mvnw -B clean package
+
+artifacts:
+  # Only the executable jar, and at the root of the artifact rather than under
+  # target/. Elastic Beanstalk's Java SE platform runs a bundle that holds a single
+  # jar at its root with `java -jar`, and needs nothing else.
+  #
+  # target/*.jar matches cloudshop.jar alone: Spring Boot's unrepackaged copy is
+  # named cloudshop.jar.original. In particular the repository's Procfile is not
+  # sent. It is Heroku's (it starts target/cloudshop.jar, a path that does not
+  # exist on Elastic Beanstalk), and a Procfile in the bundle would replace the
+  # one the platform generates.
+  files:
+    - target/*.jar
+  discard-paths: yes
+
+cache:
+  # Maven's downloads, kept on the build host between builds when CodeBuild
+  # happens to reuse it. Best effort and free; a cold build just downloads again.
+  paths:
+    - '/root/.m2/**/*'

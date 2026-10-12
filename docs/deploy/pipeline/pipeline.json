@@ -1,0 +1,114 @@
+{
+  "pipeline": {
+    "name": "cloudshop-pipeline",
+    "pipelineType": "V2",
+    "executionMode": "SUPERSEDED",
+    "roleArn": "arn:aws:iam::<acct>:role/cloudshop-pipeline-role",
+    "artifactStore": {
+      "type": "S3",
+      "location": "<artifact-bucket>"
+    },
+    "stages": [
+      {
+        "name": "Source",
+        "actions": [
+          {
+            "name": "GitHub",
+            "actionTypeId": {
+              "category": "Source",
+              "owner": "AWS",
+              "provider": "CodeStarSourceConnection",
+              "version": "1"
+            },
+            "configuration": {
+              "ConnectionArn": "arn:aws:codeconnections:us-east-1:<acct>:connection/<connection-id>",
+              "FullRepositoryId": "dimijimz/cst-323-cloudshop",
+              "BranchName": "main",
+              "OutputArtifactFormat": "CODE_ZIP"
+            },
+            "outputArtifacts": [
+              {
+                "name": "SourceArtifact"
+              }
+            ],
+            "namespace": "SourceVariables",
+            "runOrder": 1
+          }
+        ]
+      },
+      {
+        "name": "Build",
+        "actions": [
+          {
+            "name": "MavenPackage",
+            "actionTypeId": {
+              "category": "Build",
+              "owner": "AWS",
+              "provider": "CodeBuild",
+              "version": "1"
+            },
+            "configuration": {
+              "ProjectName": "cloudshop-build"
+            },
+            "inputArtifacts": [
+              {
+                "name": "SourceArtifact"
+              }
+            ],
+            "outputArtifacts": [
+              {
+                "name": "BuildArtifact"
+              }
+            ],
+            "runOrder": 1
+          }
+        ]
+      },
+      {
+        "name": "Deploy",
+        "actions": [
+          {
+            "name": "ElasticBeanstalk",
+            "actionTypeId": {
+              "category": "Deploy",
+              "owner": "AWS",
+              "provider": "ElasticBeanstalk",
+              "version": "1"
+            },
+            "configuration": {
+              "ApplicationName": "cloudshop",
+              "EnvironmentName": "cloudshop-env"
+            },
+            "inputArtifacts": [
+              {
+                "name": "BuildArtifact"
+              }
+            ],
+            "runOrder": 1
+          }
+        ]
+      }
+    ],
+    "triggers": [
+      {
+        "providerType": "CodeStarSourceConnection",
+        "gitConfiguration": {
+          "sourceActionName": "GitHub",
+          "push": [
+            {
+              "branches": {
+                "includes": ["main"]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "tags": [
+    {
+      "key": "project",
+      "value": "cloudshop"
+    }
+  ]
+}
