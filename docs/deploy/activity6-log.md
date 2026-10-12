@@ -17,7 +17,7 @@ Three parts:
 | 1. Logging with an interceptor | Done. Committed as `a04a980` and pushed. A later fix to the start-up line, `3a99083`, brought the tests to 151 (4.6) |
 | 2. AWS redeploy | Deployed and Green with `APP_LOG_LEVEL=DEBUG`, now on `cloudshop-1.0.0-3a99083`. ENTER, EXIT and EXCEPTION lines confirmed in `/var/log/web.stdout.log`. The signed-in smoke test is left for the operator (3.4) |
 | 3. Heroku and Loggly | Live at `https://cst323-cloudshop-dj-debe1645cf87.herokuapp.com` on a Basic dyno with JawsDB's free plan. Flyway applied V1 and V2; ENTER, EXIT and EXCEPTION lines confirmed in `heroku logs`. **The first start logged the database password** (4.6): fixed, and the password has since been changed (4.11). The smoke tests and the Loggly drain are left for the operator (4.9) |
-| 4. CI/CD pipeline (added later) | Being built (section 5). The connection, bucket, roles and build project exist and a test build passed. The pipeline itself waits for the GitHub connection to be approved in the console (5.4) |
+| 4. CI/CD pipeline (added later) | `cloudshop-pipeline` exists and all three stages succeed: it built, tested and deployed the footer change, which is live through CloudFront. **It does not yet start by itself on a push**; the GitHub connection was authorized without the app installation that delivers push events (5.7) |
 
 ## Ground rules
 
@@ -832,3 +832,132 @@ can complete it, in the console:
 
 The pipeline itself is created after that, so that its first execution is not a
 failed one.
+
+### 5.5 Pipeline created; first execution (14:56 UTC on 2026-10-12)
+
+The operator approved the connection and it became `AVAILABLE`.
+
+```
+aws codepipeline create-pipeline --cli-input-json file://pipeline.json
+```
+
+Creating a pipeline starts it. That first execution ran commit `65cd0dc`:
+
+| Stage | Result | Time |
+|-------|--------|------|
+| Source | Succeeded | 4 s |
+| Build | Succeeded | 2 min 3 s for the action; the build inside it ran 84 s |
+| Deploy | **Failed** | 35 s |
+
+```
+Deployment failed. The provided role does not have sufficient permissions:
+Service:Amazon S3, Message: ... cloudshop-pipeline-role ... is not authorized to perform:
+s3:DeleteObject on resource: "arn:aws:s3:::elasticbeanstalk-us-east-1-<acct>/resources/environments/e-ymbnrtr5ck/_runtime/_versions/cloudshop/code-pipeline-..."
+```
+
+After a deploy, Elastic Beanstalk removes its staged copy of the bundle from its
+own bucket, and it does that as the caller. The policy in 5.2 came from
+CloudTrail's event history, which records bucket-level calls but not object-level
+ones, so this one was not in it.
+
+While that deploy was failed the environment showed Red: `Incorrect application
+version found on all instances`. The site itself kept answering, on the previous
+version, and scaling was not left suspended.
+
+The fix is one statement, limited to this environment's folder:
+
+```json
+{
+  "Sid": "RemoveTheEnvironmentsStagedCopyOfTheBundleAfterADeploy",
+  "Effect": "Allow",
+  "Action": "s3:DeleteObject",
+  "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-<acct>/resources/environments/e-ymbnrtr5ck/*"
+}
+```
+
+`aws codepipeline retry-stage-execution --stage-name Deploy --retry-mode FAILED_ACTIONS`
+then deployed the same build: Succeeded in 36 s, environment Green.
+
+Elastic Beanstalk's events for a pipeline deploy read a little differently from
+an `eb deploy`, because the bundle is a zip holding the jar rather than the jar
+itself:
+
+```
+15:00:57  Deploying new version to instance(s).
+15:01:03  Instance deployment successfully generated a 'Procfile'.
+15:01:11  Instance deployment completed successfully.
+15:01:18  Environment update completed successfully.
+```
+
+That generated `Procfile` is the platform's own, `web: java -jar cloudshop.jar`,
+which is the point of sending the jar and nothing else.
+
+The application version a pipeline run creates is named
+`code-pipeline-<timestamp>-BuildArtifact-<id>`, and its source bundle is the
+object in the artifact bucket, not a copy. **So the artifact of the version that
+is live must not be deleted from the bucket**: a replacement instance would have
+nothing to install. This is why the bucket has no expiry rule.
+
+### 5.6 The test: a footer line, pushed
+
+`src/main/resources/templates/fragments/layout.html`, line 92:
+
+```html
+<span class="float-end">Deployed by AWS CodePipeline</span>
+```
+
+Pushed as `c34e25b` at 15:02:34 UTC, together with the policy fix above.
+
+**The push did not start the pipeline.** Seven minutes later there was still only
+the one execution. Started by hand instead
+(`aws codepipeline start-pipeline-execution --name cloudshop-pipeline`), the
+pipeline ran that commit cleanly:
+
+| Stage | Result | Time |
+|-------|--------|------|
+| Source | Succeeded | 3 s |
+| Build | Succeeded | 1 min 40 s (the build inside it: 70 s, 151 tests) |
+| Deploy | Succeeded | 36 s |
+| **Whole run** | **Succeeded** | **2 min 20 s** |
+
+And the footer is live through CloudFront, on `/`, `/products` and `/login`:
+
+```html
+<footer class="container border-top mt-5 py-3 text-muted small">
+<span>CST-323 Cloud Computing &middot; CloudShop &middot; Spring Boot, Spring Security and MySQL</span>
+<span class="float-end">Deployed by AWS CodePipeline</span>
+</footer>
+```
+
+The Heroku site does not show it. Heroku still runs `3a99083`, and nothing pushes
+there automatically; a later `git push heroku main` would carry the line with it,
+where it would not be true.
+
+### 5.7 Why the push did not start it
+
+CloudTrail has the connection's whole history, and it is short:
+
+```
+14:52:37  StartOAuthHandshake
+14:53:04  StartOAuthHandshake
+14:53:23  GetIndividualAccessToken
+14:53:35  UpdateConnectionOAuthToken
+```
+
+That is an authorization and nothing else. There is no installation step in it,
+and the repository has no webhook. The connection can read the repository, which
+is why the Source stage works, but GitHub has not been told to notify AWS of
+pushes: that is done by the AWS Connector for GitHub app being installed on the
+repository and tied to the connection. No `StartPipelineExecution` by anything
+but the operator's own user appears after the push.
+
+The pipeline's trigger itself is stored as intended:
+
+```json
+[{"providerType": "CodeStarSourceConnection",
+  "gitConfiguration": {"sourceActionName": "GitHub",
+                       "push": [{"branches": {"includes": ["main"]}}]}}]
+```
+
+So the remaining work is on the connection, and needs the account holder at the
+console once more.
