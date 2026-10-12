@@ -77,6 +77,12 @@
       ]
     },
     {
+      "Sid": "RemoveTheEnvironmentsStagedCopyOfTheBundleAfterADeploy",
+      "Effect": "Allow",
+      "Action": "s3:DeleteObject",
+      "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-<acct>/resources/environments/e-ymbnrtr5ck/*"
+    },
+    {
       "Sid": "WhatElasticBeanstalkReadsAboutTheEnvironmentWhileDeploying",
       "Effect": "Allow",
       "Action": [
