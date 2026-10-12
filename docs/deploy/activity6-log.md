@@ -16,7 +16,7 @@ Three parts:
 |------|-------|
 | 1. Logging with an interceptor | Done. 144 tests pass; committed as `a04a980` and pushed |
 | 2. AWS redeploy | Deployed and Green on `cloudshop-1.0.0-a04a980` with `APP_LOG_LEVEL=DEBUG`. ENTER, EXIT and EXCEPTION lines confirmed in `/var/log/web.stdout.log`. The signed-in smoke test is left for the operator (3.4) |
-| 3. Heroku and Loggly | Not started. Blocked: no Heroku CLI on this machine (4.1) |
+| 3. Heroku and Loggly | Nothing created yet. The CLI is installed and signed in, and the cost is approved, but `heroku create` is refused until the account has a payment method (4.3) |
 
 ## Ground rules
 
@@ -419,3 +419,32 @@ Nothing was created on Heroku. Part 3 resumes when the CLI is installed and
 
 Planned from that, not yet done: `DB_POOL_MAX=4`, so that the old and the new dyno
 can overlap during a restart (2 x 4 = 8) and still stay under the cap of 10.
+
+### 4.3 CLI installed and signed in; app creation refused
+
+The operator installed the CLI with `npm install -g heroku` and ran `heroku login`.
+
+| Check | Result |
+|-------|--------|
+| `heroku --version` | `heroku/11.11.0 win32-x64 node-v20.15.0` |
+| npm's `EBADENGINE` warnings during the install | Harmless here. Some dependencies ask for Node 20.17 to 20.19; the CLI itself asks only for Node 20. Each package npm named was loaded on this Node and loads |
+| `heroku auth:whoami` | Signed in (address not recorded here) |
+| `heroku apps` | `You have no apps.` |
+| `heroku addons:plans jawsdb` | `jawsdb:kitefin`, Kitefin Shared, is the default plan and is listed as `free`. The next plan up is `jawsdb:leopard` at about $0.014 an hour, $10 a month at most |
+
+The operator was shown the cost and approved it: one Basic dyno at about $0.01 an
+hour, at most $7 a month, and the free JawsDB plan.
+
+```
+heroku create cst323-cloudshop-dj
+```
+
+```
+Creating cst323-cloudshop-dj... !
+Error: To create an app, verify your account by adding payment information.
+Verify now at https://heroku.com/verify
+Error ID: verification_required
+```
+
+Nothing was created. Adding a payment method is the account holder's step; Part 3
+resumes after it.
