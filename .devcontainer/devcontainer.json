@@ -1,0 +1,49 @@
+// Opens CloudShop in GitHub Codespaces (or any dev container tool) ready to run:
+// Java 17, Maven and the VS Code Extension Pack for Java, with the in-memory "h2"
+// profile switched on, so no MySQL is needed. Start the shop with
+//   ./mvnw spring-boot:run
+// and open the forwarded port 8080. See "GitHub Codespaces" in README.md.
+{
+    "name": "CloudShop (Java 17, in-memory database)",
+
+    // Microsoft's Java dev container image: JDK 17 on Debian 12.
+    "image": "mcr.microsoft.com/devcontainers/java:1-17-bookworm",
+
+    "features": {
+        // Keeps the image's JDK ("none") and adds Maven. The repository's Maven
+        // wrapper (./mvnw) works without it; this puts a plain `mvn` on the path too.
+        "ghcr.io/devcontainers/features/java:1": {
+            "version": "none",
+            "installMaven": "true",
+            "installGradle": "false"
+        }
+    },
+
+    // Every process in the container runs with the in-memory profile: H2 in MySQL
+    // mode, built by the same Flyway migrations, reset each time the app starts.
+    // No owner credentials are set here on purpose; see the README to add them.
+    "containerEnv": {
+        "SPRING_PROFILES_ACTIVE": "h2"
+    },
+
+    // The app listens on PORT, which is unset here, so on its default of 8080.
+    "forwardPorts": [8080],
+    "portsAttributes": {
+        "8080": {
+            "label": "CloudShop",
+            "onAutoForward": "openBrowser"
+        }
+    },
+
+    // Downloads Maven and every dependency once, while the codespace is created,
+    // so the first `./mvnw spring-boot:run` starts in seconds.
+    "postCreateCommand": "./mvnw -B -q -DskipTests package",
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "vscjava.vscode-java-pack"
+            ]
+        }
+    }
+}

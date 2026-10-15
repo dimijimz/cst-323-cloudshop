@@ -2,8 +2,9 @@
 
 An online shop built for **CST-323 Cloud Computing**: the Milestone 3 application,
 with the Milestone 4 [DevOps](#devops) work around it (logging, monitoring and a
-deployment pipeline). Each user signs in either as a **buyer** or as the **shop
-owner**.
+deployment pipeline) and the Milestone 5 finish: [JavaDoc](#code-documentation) on
+everything, small refactors, and a [Codespaces](#github-codespaces) setup. Each
+user signs in either as a **buyer** or as the **shop owner**.
 
 - **Buyers** register themselves, browse the catalog, buy products that are in
   stock, and see their own purchase history.
@@ -19,6 +20,7 @@ builds itself with Flyway, and logs go to the console.
 
 - [Tech stack](#tech-stack)
 - [Run it](#run-it)
+- [GitHub Codespaces](#github-codespaces)
 - [Demo walkthrough](#demo-walkthrough)
 - [Pages and routes](#pages-and-routes)
 - [Environment variables](#environment-variables)
@@ -27,6 +29,7 @@ builds itself with Flyway, and logs go to the console.
 - [Logging](#logging)
 - [Database and migrations](#database-and-migrations)
 - [Tests](#tests)
+- [Code documentation](#code-documentation)
 - [Design diagrams](#design-diagrams)
 - [Project layout](#project-layout)
 - [Deploying](#deploying)
@@ -131,6 +134,36 @@ the same environment variables:
 SPRING_PROFILES_ACTIVE=h2 OWNER_USERNAME=owner OWNER_PASSWORD='pick-your-own-password' java -jar target/cloudshop.jar
 ```
 
+## GitHub Codespaces
+
+The repository opens in GitHub Codespaces ready to run, with nothing to install:
+Java 17, Maven and the VS Code Extension Pack for Java, with the in-memory `h2`
+profile switched on, so no MySQL is needed. The setup is in
+[`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json).
+
+1. On the repository's GitHub page choose **Code**, the **Codespaces** tab, then
+   **Create codespace on main**. The first start takes a few minutes, while the
+   container is built and Maven downloads the dependencies.
+2. In the codespace's terminal, start the shop:
+
+   ```bash
+   ./mvnw spring-boot:run
+   ```
+
+3. Port **8080** is forwarded, and a browser tab opens on it as soon as the shop
+   is listening. If the tab is blocked, the **Ports** tab has the address. The
+   port is private to your GitHub account unless you change that.
+
+To be able to sign in as the owner, give the two owner variables for that run,
+with a password of your own. Like everything in the in-memory database, the
+account lasts until the shop stops:
+
+```bash
+OWNER_USERNAME=owner OWNER_PASSWORD='pick-your-own-password' ./mvnw spring-boot:run
+```
+
+`./mvnw test` runs the test suite there too.
+
 ## Demo walkthrough
 
 Start the app with Option A, then follow along at <http://localhost:8080>. The
@@ -214,6 +247,9 @@ seed data is set up for this: the **1080p Webcam** has exactly one unit and the
 | `/health` | GET | Public | `HealthController` | Liveness probe, JSON, no database check |
 | `/actuator/health` | GET | Public | Spring Boot Actuator | Readiness probe, status only |
 | `/actuator/info` | GET | Public | Spring Boot Actuator | Application name and course |
+
+Every public GET route also answers `HEAD`: the same status and headers, without
+the body. That is the request uptime monitors send.
 
 Any other URL requires signing in. A missing or deactivated product answers 404;
 a signed-in user without the right role gets 403; an anonymous one is sent to
@@ -451,13 +487,13 @@ key, so deleting a product that has been sold would be refused by the database.
 ./mvnw test
 ```
 
-154 tests, no database or Docker needed. They run against H2 in MySQL mode, built
+165 tests, no database or Docker needed. They run against H2 in MySQL mode, built
 by Flyway from the real migrations.
 
 | Class | What it covers |
 |-------|----------------|
 | `PurchaseServiceTest` | A normal purchase; insufficient stock; **a later price change does not alter past purchases**; inactive and unknown products; rollback; the sales filters; and two concurrency tests - two buyers racing for the last unit, and ten buyers for four units |
-| `SecurityAccessTest` | **A buyer cannot reach `/owner/**`**; **anonymous users are sent to login**; the owner cannot purchase; CSRF; the actuator exposes only health and info, without details |
+| `SecurityAccessTest` | **A buyer cannot reach `/owner/**`**; **anonymous users are sent to login**; the public pages answer `HEAD`, which uptime monitors send, while protected pages still redirect; the owner cannot purchase; CSRF; the actuator exposes only health and info, without details |
 | `RegistrationTest` | **Registration** creates a BCrypt-hashed buyer who can sign in; duplicates, mismatched and weak passwords are rejected; nothing submitted can create an owner |
 | `OwnerAccountInitializerTest` | The owner is created from the configured credentials, exactly once, and is never reset |
 | `ShopFlowTest` | Every page rendered through MockMvc: catalog, purchase and confirmation, history, inventory, sales |
@@ -477,6 +513,21 @@ The logging has its own tests, in the `logging` test package:
 | `ExceptionLogTest` | WARN or ERROR, and the once-only stack trace, including for an exception that wraps one already traced |
 | `LoggingConfigurationTest` | Console is the only appender, the pattern is the agreed one, the banner is off, and the level comes from `APP_LOG_LEVEL` |
 | `StartupLineTest` (root test package) | The start-up line names the database without ever repeating a credential, whatever form of JDBC URL the platform supplied |
+
+## Code documentation
+
+Every class, field, constructor and method in `src/main/java`, private ones
+included, has a JavaDoc comment, and each package has a `package-info.java`. To
+generate the HTML pages:
+
+```bash
+./mvnw javadoc:javadoc
+```
+
+They are written to `target/reports/apidocs/index.html`. `pom.xml` sets the plugin
+to include private members and to fail on any JavaDoc warning, such as a missing
+comment, `@param`, `@return` or `@throws`, so the pages can only be produced
+complete. `package` does not run it, so the pipeline's build is not slowed down.
 
 ## Design diagrams
 
@@ -506,17 +557,23 @@ five UML class diagrams are **generated from the compiled classes** by
 types always match the code; re-run the script after changing a class. The dashed
 "uses" arrows of the logging diagram are read from the class files as well.
 
-[`docs/design/milestone4`](docs/design/milestone4) holds the five class diagrams
-as the Milestone 4 design report uses them, each about 1500 pixels wide. They are
-written by the same script:
+[`docs/design/milestone4`](docs/design/milestone4) and
+[`docs/design/milestone5`](docs/design/milestone5) hold the five class diagrams as
+each milestone's design report uses them, about 1500 pixels wide. The same script
+writes them:
 
 ```bash
-./docs/diagrams/render.sh --export docs/design/milestone4
+./docs/diagrams/render.sh --export docs/design/milestone5
 ```
 
-The model, controller, service and repository diagrams are the same as in
-Milestone 3. The logging was put around those classes by an aspect, not written
-into them, so nothing the diagrams draw has changed. `uml-logging` is new.
+- **Milestone 4.** The model, controller, service and repository diagrams are the
+  same as in Milestone 3: the logging was put around those classes by an aspect,
+  not written into them. `uml-logging` is new.
+- **Milestone 5.** Three diagrams changed with the refactoring. The model diagram
+  shows the column-length constants on `Product` and `User`, the controller
+  diagram the constants of `OwnerProductController`, and the service diagram no
+  longer has `UserService.findByUsername`, which nothing called. The repository and
+  logging diagrams are unchanged.
 
 ## Project layout
 
@@ -525,6 +582,7 @@ cloudshop/
 ├── pom.xml
 ├── mvnw, mvnw.cmd, .mvn/           Maven wrapper - no local Maven needed
 ├── .env.example                    every environment variable, documented
+├── .devcontainer/                  GitHub Codespaces: Java 17, Maven, the in-memory profile, port 8080
 ├── Procfile, system.properties     Heroku process type and JDK version
 ├── buildspec.yml                   what AWS CodeBuild runs in the pipeline's Build stage
 ├── docker-compose.yml              optional local MySQL
@@ -532,7 +590,7 @@ cloudshop/
 ├── docs/
 │   ├── ddl/                        schema.sql and seed.sql, exported from the migrations
 │   ├── deploy/                     deployment logs, pipeline definitions, Heroku config script, smoke test
-│   ├── design/milestone4/          the five UML class diagrams, exported for the Milestone 4 report
+│   ├── design/milestone4/, milestone5/   the five UML class diagrams, exported for each report
 │   └── diagrams/                   design-report diagrams, sources and render script
 └── src/
     ├── main/
@@ -558,7 +616,7 @@ cloudshop/
     │       ├── db/migration/               Flyway V1 schema, V2 seed
     │       ├── static/css/app.css
     │       └── templates/                  Thymeleaf views
-    └── test/                               154 tests, H2 in MySQL mode
+    └── test/                               165 tests, H2 in MySQL mode
 ```
 
 ## Deploying
@@ -699,16 +757,18 @@ minutes and sends an email alert when one stops answering:
 | AWS | https://d2m8eu1qwn32t4.cloudfront.net |
 | Heroku | https://cst323-cloudshop-dj-debe1645cf87.herokuapp.com |
 
-Each check is a `HEAD` request for the home page. The shop opens its public pages
-to `GET` only, so it answers a `HEAD` with a redirect to `/login`, and the login
-page answers 200: the monitor reports the site up. When the application is not
-running, the platform answers 503 itself and the check fails. That was tried on
-2026-10-12 by scaling the Heroku dyno to zero: the next check got Heroku's `H14`
-error, "No web processes running".
+Each check is a `HEAD` request for the home page, which asks for the page without
+its body. Since Milestone 5 the public pages answer `HEAD` as they answer `GET`, so
+on AWS the check loads the home page itself, and the home page reads the catalog
+from the database. Heroku still runs an older build, where a `HEAD` on a public
+page is redirected to `/login` and the monitor counts the login page's 200 instead.
+When the application is not running, the platform answers 503 itself and the
+check fails. That was tried on 2026-10-12 by scaling the Heroku dyno to zero: the
+next check got Heroku's `H14` error, "No web processes running".
 
-A check of that kind shows that the application is serving pages. Two endpoints
-say more to anything that sends a `GET`: `/health` answers while the process is
-up, and `/actuator/health` reports `UP` only while the database answers too.
+Two endpoints say more: `/health` answers while the process is up, and
+`/actuator/health` reports `UP` only while the database answers too. Both accept
+`HEAD` as well as `GET`.
 
 ### Deployment pipeline
 
@@ -737,8 +797,8 @@ in `src/main/resources/templates/fragments/layout.html`, and editing it is the
 quickest way to watch a push go through all three stages.
 
 Heroku is outside the pipeline. It is deployed by hand with `git push heroku main`
-and, as of Milestone 4, still runs the Activity 6 build (commit `3a99083`), so its
-pages do not carry that footer line.
+and, as of Milestone 5, still runs the Activity 6 build (commit `3a99083`), so its
+pages carry neither that footer line nor anything changed since.
 
 ## Known limitations
 
@@ -760,5 +820,10 @@ pages do not carry that footer line.
 - **Times are in the server's time zone**, which is UTC on the usual cloud hosts.
 - **One product per purchase** - there is no cart. **No password change or reset.**
   **No pagination** on the catalog or the sales report.
-- **The `h2` profile is in-memory**: all data is lost on restart.
+- **The `h2` profile is in-memory**: all data is lost on restart, which includes a
+  codespace's data whenever the shop is stopped.
+- **Heroku lags behind.** Only AWS is deployed by the pipeline; Heroku is deployed
+  by hand and still runs the Activity 6 build.
+- **A class calling its own public method is not traced on its own**, because that
+  call does not pass through the Spring proxy (see [The interceptor](#the-interceptor)).
 - Bootstrap is loaded from a CDN, so pages are unstyled without internet access.
