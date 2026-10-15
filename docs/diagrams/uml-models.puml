@@ -24,6 +24,8 @@ hide <<external>> stereotype
 title CloudShop - Model Classes\n<size:11>package edu.gcu.cst323.cloudshop.model</size>
 
 class Product <<Entity>> {
+    + {static} NAME_MAX_LENGTH: int
+    + {static} DESCRIPTION_MAX_LENGTH: int
     - id: Long
     - name: String
     - description: String
@@ -76,6 +78,8 @@ enum Role <<enumeration>> {
 }
 
 class User <<Entity>> {
+    + {static} USERNAME_MAX_LENGTH: int
+    + {static} EMAIL_MAX_LENGTH: int
     - id: Long
     - username: String
     - email: String

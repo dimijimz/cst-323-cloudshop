@@ -62,7 +62,6 @@ class UserService <<Service>> {
     + ownerExists(): boolean
     + usernameTaken(username: String): boolean
     + emailTaken(email: String): boolean
-    + findByUsername(username: String): User
     - {static} normalizeEmail(email: String): String
 }
 

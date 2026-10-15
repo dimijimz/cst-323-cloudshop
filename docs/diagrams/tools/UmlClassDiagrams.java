@@ -128,8 +128,9 @@ public class UmlClassDiagrams {
         try (Stream<Path> files = Files.list(dir)) {
             for (Path file : files.sorted().toList()) {
                 String name = file.getFileName().toString();
-                // Skips anonymous and nested classes, which carry a $ in their file name.
-                if (name.endsWith(".class") && !name.contains("$")) {
+                // Skips anonymous and nested classes, which carry a $ in their file name,
+                // and package-info, which javac writes when a package has annotations.
+                if (name.endsWith(".class") && !name.contains("$") && !name.equals("package-info.class")) {
                     String className = BASE_PACKAGE + "." + pkg + "." + name.substring(0, name.length() - 6);
                     found.add(Class.forName(className, false, loader));
                 }

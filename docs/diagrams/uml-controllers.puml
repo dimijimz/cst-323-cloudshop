@@ -57,6 +57,11 @@ class HomeController <<Controller>> {
 }
 
 class OwnerProductController <<Controller>> {
+    + {static} INVENTORY_URL: String
+    - {static} REDIRECT_TO_INVENTORY: String
+    - {static} PRODUCT_FORM_VIEW: String
+    - {static} ADD_PRODUCT_TITLE: String
+    - {static} EDIT_PRODUCT_TITLE: String
     - productService: ProductService
     --
     + OwnerProductController(productService: ProductService)
