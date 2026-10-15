@@ -125,6 +125,27 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+
+            <!--
+              JavaDoc for the whole application, private members included:
+                ./mvnw javadoc:javadoc      writes target/reports/apidocs/index.html
+              doclint "all" reports a missing comment, @param, @return or @throws as a
+              warning, and failOnWarnings fails the run on any warning, so the pages can
+              only be produced complete. It is not bound to a phase, so `package` (and
+              the pipeline's build) does not run it. The version comes from the parent.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <show>private</show>
+                    <doclint>all</doclint>
+                    <failOnWarnings>true</failOnWarnings>
+                    <quiet>true</quiet>
+                    <doctitle>CloudShop ${project.version} - API documentation</doctitle>
+                    <windowtitle>CloudShop ${project.version} - API documentation</windowtitle>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

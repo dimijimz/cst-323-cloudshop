@@ -17,24 +17,33 @@ import java.math.BigDecimal;
  * <p>A separate form object, rather than binding the {@link Product} entity
  * directly, so a request can only ever set these four fields. The id comes from
  * the URL and the active flag has its own deactivate and reactivate actions.
+ *
+ * <p>The limits mirror the columns. The two lengths are the entity's own
+ * constants; the price fits {@code products.price DECIMAL(10,2)}, and with stock
+ * capped at a million units the largest possible purchase total still fits
+ * {@code purchases.total_price DECIMAL(16,2)}.
+ *
+ * @author Dimitri Jimenez
  */
 public class ProductForm {
 
+    /** The display name: required, and no longer than the column that stores it. */
     @NotBlank(message = "Name is required")
-    @Size(max = 120, message = "Name must be 120 characters or fewer")
+    @Size(max = Product.NAME_MAX_LENGTH, message = "Name must be {max} characters or fewer")
     private String name;
 
+    /** The catalog text: required, and no longer than the column that stores it. */
     @NotBlank(message = "Description is required")
-    @Size(max = 1000, message = "Description must be 1000 characters or fewer")
+    @Size(max = Product.DESCRIPTION_MAX_LENGTH, message = "Description must be {max} characters or fewer")
     private String description;
 
-    // The limits mirror the columns: price is DECIMAL(10,2), and with stock capped at a
-    // million units the largest possible purchase total still fits total_price DECIMAL(16,2).
+    /** The unit price: required, not negative, under 100,000,000, with at most two decimal places. */
     @NotNull(message = "Price is required")
     @DecimalMin(value = "0.00", message = "Price cannot be negative")
     @Digits(integer = 8, fraction = 2, message = "Price must be under 100,000,000 with at most 2 decimal places")
     private BigDecimal price;
 
+    /** The number of units on hand: required, from zero to a million. */
     @NotNull(message = "Stock is required")
     @Min(value = 0, message = "Stock cannot be negative")
     @Max(value = 1_000_000, message = "Stock cannot exceed 1,000,000")

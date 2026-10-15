@@ -15,6 +15,8 @@ import java.util.List;
  * <p>Both queries fetch the associations the pages display in the same round trip.
  * Open-session-in-view is switched off, so a lazy association left unfetched here
  * could not be loaded later from a template.
+ *
+ * @author Dimitri Jimenez
  */
 @Repository
 public interface PurchaseRepository extends JpaRepository<Purchase, Long> {

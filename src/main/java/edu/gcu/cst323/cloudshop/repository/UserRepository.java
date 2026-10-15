@@ -13,6 +13,8 @@ import java.util.Optional;
  * <p>The lookups ignore case because MySQL's default collation already treats
  * {@code Alice} and {@code alice} as the same value under the unique constraints.
  * Matching that here keeps the application's own checks in step with the database.
+ *
+ * @author Dimitri Jimenez
  */
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {

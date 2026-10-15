@@ -9,9 +9,12 @@ import jakarta.validation.constraints.NotNull;
  * <p>Only the lower bound is validated here. Whether enough stock exists is not a
  * property of the form: it is decided inside the purchase transaction, at the
  * moment of sale, because the stock shown on the page may already be out of date.
+ *
+ * @author Dimitri Jimenez
  */
 public class PurchaseForm {
 
+    /** How many units to buy: required and at least one. It starts at one, the default the page shows. */
     @NotNull(message = "Quantity is required")
     @Min(value = 1, message = "Quantity must be at least 1")
     private Integer quantity = 1;

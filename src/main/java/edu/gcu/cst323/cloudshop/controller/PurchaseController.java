@@ -1,5 +1,7 @@
 package edu.gcu.cst323.cloudshop.controller;
 
+import edu.gcu.cst323.cloudshop.exception.InsufficientStockException;
+import edu.gcu.cst323.cloudshop.exception.ResourceNotFoundException;
 import edu.gcu.cst323.cloudshop.form.PurchaseForm;
 import edu.gcu.cst323.cloudshop.logging.ErrorCode;
 import edu.gcu.cst323.cloudshop.logging.LogValues;
@@ -29,13 +31,19 @@ import java.util.Locale;
  *
  * <p>The buyer is always taken from the signed-in principal, never from the
  * request, so one buyer cannot purchase as, or read the history of, another.
+ *
+ * @author Dimitri Jimenez
  */
 @Controller
 public class PurchaseController {
 
+    /** Records each rejected quantity form, naming the field at fault. */
     private static final Logger log = LoggerFactory.getLogger(PurchaseController.class);
 
+    /** Runs the purchase transaction and loads the buyer's history. */
     private final PurchaseService purchaseService;
+
+    /** Reloads the product when the quantity form has to be shown again. */
     private final ProductService productService;
 
     /**
@@ -65,6 +73,8 @@ public class PurchaseController {
      * @param model              receives the product if the form is redisplayed
      * @param redirectAttributes carries the confirmation to the next page
      * @return a redirect to /my-purchases on success, otherwise the product detail view
+     * @throws InsufficientStockException if fewer units are left than were asked for
+     * @throws ResourceNotFoundException  if the product does not exist or has been deactivated
      */
     @PostMapping("/products/{id}/purchase")
     public String purchase(@PathVariable Long id,

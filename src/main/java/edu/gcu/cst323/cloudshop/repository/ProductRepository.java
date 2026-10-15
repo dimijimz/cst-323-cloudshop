@@ -10,7 +10,11 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-/** Data access for {@link Product} rows, including the stock decrement a purchase relies on. */
+/**
+ * Data access for {@link Product} rows, including the stock decrement a purchase relies on.
+ *
+ * @author Dimitri Jimenez
+ */
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 

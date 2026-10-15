@@ -6,6 +6,8 @@ package edu.gcu.cst323.cloudshop.model;
  * <p>Stored as text in {@code users.role}, where a CHECK constraint limits the
  * column to these two names. Spring Security sees them as the authorities
  * {@code ROLE_BUYER} and {@code ROLE_OWNER}.
+ *
+ * @author Dimitri Jimenez
  */
 public enum Role {
 

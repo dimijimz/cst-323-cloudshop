@@ -1,6 +1,5 @@
 package edu.gcu.cst323.cloudshop.service;
 
-import edu.gcu.cst323.cloudshop.exception.ResourceNotFoundException;
 import edu.gcu.cst323.cloudshop.form.RegistrationForm;
 import edu.gcu.cst323.cloudshop.model.Role;
 import edu.gcu.cst323.cloudshop.model.User;
@@ -27,14 +26,20 @@ import java.util.Locale;
  * <p>Passwords arrive here in plain text, are hashed once, and are never logged.
  * Neither are usernames or email addresses: the log lines and the exception
  * messages written here refer to an account by its id or not at all.
+ *
+ * @author Dimitri Jimenez
  */
 @Service
 @Transactional(readOnly = true)
 public class UserService implements UserDetailsService {
 
+    /** Writes the INFO lines for a new buyer or owner account, by id. */
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
+    /** Data access for accounts. */
     private final UserRepository userRepository;
+
+    /** Hashes each new password with BCrypt before it is stored. */
     private final PasswordEncoder passwordEncoder;
 
     /**
@@ -151,17 +156,11 @@ public class UserService implements UserDetailsService {
     }
 
     /**
-     * Finds an account by its sign-in name.
+     * Puts an email address into the form it is stored and compared in.
      *
-     * @param username the name to look up, in any letter case
-     * @return the account
-     * @throws ResourceNotFoundException if no account has that name
+     * @param email the address as typed
+     * @return the address without surrounding spaces, in lower case
      */
-    public User findByUsername(String username) {
-        return userRepository.findByUsernameIgnoreCase(username)
-                .orElseThrow(() -> new ResourceNotFoundException("No account has that username"));
-    }
-
     private static String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
     }

@@ -7,12 +7,21 @@ package edu.gcu.cst323.cloudshop.exception;
  * update matched no row, so by the time it is raised nothing has been sold and
  * nothing has been recorded. {@link GlobalExceptionHandler} sends the buyer back
  * to the product page with the message.
+ *
+ * @author Dimitri Jimenez
  */
 public class InsufficientStockException extends RuntimeException {
 
+    /** The product that could not be bought; the buyer is sent back to its page. */
     private final Long productId;
+
+    /** The product's display name, as it appears in the message. */
     private final String productName;
+
+    /** How many units the buyer asked for. */
     private final int requested;
+
+    /** How many units were left when the purchase was attempted. */
     private final int available;
 
     /**
@@ -31,6 +40,15 @@ public class InsufficientStockException extends RuntimeException {
         this.available = available;
     }
 
+    /**
+     * Builds the message the buyer sees, which says how much was left.
+     *
+     * @param productName the product's display name
+     * @param requested   how many units were asked for
+     * @param available   how many units were left
+     * @return that the product is out of stock, or how many units were left and that
+     *         the order could not be placed, followed by "Nothing was purchased."
+     */
     private static String describe(String productName, int requested, int available) {
         String outcome = " Nothing was purchased.";
         if (available <= 0) {

@@ -17,6 +17,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * asks for more than is in stock, follows a stale link or mistypes a form. Those
  * are logged at WARN, on one line. {@link #UNEXPECTED} is everything else, and is
  * logged at ERROR with a stack trace.
+ *
+ * @author Dimitri Jimenez
  */
 public enum ErrorCode {
 
@@ -32,9 +34,18 @@ public enum ErrorCode {
     /** Anything the application did not anticipate. */
     UNEXPECTED("ERR-UNEXPECTED", false);
 
+    /** The code as it is written in the log, for example {@code ERR-STOCK}. */
     private final String label;
+
+    /** True for an ordinary business outcome, logged at WARN; false for a fault, logged at ERROR. */
     private final boolean expected;
 
+    /**
+     * Defines one code.
+     *
+     * @param label    the code as it is written in the log
+     * @param expected true if the code marks an ordinary business outcome rather than a fault
+     */
     ErrorCode(String label, boolean expected) {
         this.label = label;
         this.expected = expected;

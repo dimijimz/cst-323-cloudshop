@@ -23,6 +23,7 @@ import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -91,6 +92,30 @@ class SecurityAccessTest {
     @ValueSource(strings = {"/", "/products", "/login", "/register", "/health", "/actuator/health", "/actuator/info"})
     void publicPagesNeedNoLogin(String url) throws Exception {
         mockMvc.perform(get(url)).andExpect(status().isOk());
+    }
+
+    // An uptime monitor such as Uptime Robot checks a site with HEAD, which asks for
+    // the GET response without its body. A public page must answer it, not redirect.
+    // (Leaving the body out is the servlet container's job, so MockMvc still has it.)
+    @ParameterizedTest(name = "anonymous HEAD {0} is answered like the GET, not redirected to the login page")
+    @ValueSource(strings = {"/", "/products", "/login", "/register", "/health", "/actuator/health", "/actuator/info"})
+    void publicPagesAnswerHeadRequests(String url) throws Exception {
+        mockMvc.perform(head(url)).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("an anonymous HEAD on a product page reaches the catalog, so a monitor checks the database too")
+    void anonymousHeadOnAProductReachesTheCatalog() throws Exception {
+        mockMvc.perform(head("/products/{id}", product.getId())).andExpect(status().isOk());
+        mockMvc.perform(head("/products/{id}", 999_999)).andExpect(status().isNotFound());
+    }
+
+    @ParameterizedTest(name = "anonymous HEAD {0} is still sent to the login page")
+    @ValueSource(strings = {"/owner/products", "/owner/sales", "/my-purchases"})
+    void headOnAProtectedPageIsStillSentToLogin(String url) throws Exception {
+        mockMvc.perform(head(url))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
     }
 
     @Test

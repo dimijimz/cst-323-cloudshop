@@ -1,5 +1,6 @@
 package edu.gcu.cst323.cloudshop.form;
 
+import edu.gcu.cst323.cloudshop.model.User;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -10,26 +11,45 @@ import jakarta.validation.constraints.Size;
  *
  * <p>There is deliberately no role field. Everyone who registers becomes a buyer,
  * so nothing a visitor submits can ask for an owner account.
+ *
+ * @author Dimitri Jimenez
  */
 public class RegistrationForm {
 
+    /** The shortest sign-in name accepted. The longest is what the column holds. */
+    private static final int USERNAME_MIN_LENGTH = 3;
+
+    /** The shortest password accepted. */
+    private static final int PASSWORD_MIN_LENGTH = 8;
+
+    /**
+     * The longest password accepted. BCrypt only reads the first 72 bytes of a
+     * password, so anything longer would be silently truncated; capping the length
+     * keeps what was typed and what is checked the same.
+     */
+    private static final int PASSWORD_MAX_LENGTH = 72;
+
+    /** The requested sign-in name: letters, digits, dots, hyphens and underscores only. */
     @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    @Size(min = USERNAME_MIN_LENGTH, max = User.USERNAME_MAX_LENGTH,
+            message = "Username must be between {min} and {max} characters")
     @Pattern(regexp = "^[A-Za-z0-9._-]*$",
             message = "Username may only contain letters, digits, dots, hyphens and underscores")
     private String username;
 
+    /** The contact address, which no other account may already use. */
     @NotBlank(message = "Email is required")
     @Email(message = "Enter a valid email address")
-    @Size(max = 120, message = "Email must be 120 characters or fewer")
+    @Size(max = User.EMAIL_MAX_LENGTH, message = "Email must be {max} characters or fewer")
     private String email;
 
-    // BCrypt only reads the first 72 bytes of a password, so anything longer would be
-    // silently truncated. Capping the length keeps what was typed and what is checked equal.
+    /** The chosen password, in plain text until the service hashes it. */
     @NotBlank(message = "Password is required")
-    @Size(min = 8, max = 72, message = "Password must be between 8 and 72 characters")
+    @Size(min = PASSWORD_MIN_LENGTH, max = PASSWORD_MAX_LENGTH,
+            message = "Password must be between {min} and {max} characters")
     private String password;
 
+    /** The password typed a second time, which must match the first. */
     @NotBlank(message = "Please confirm your password")
     private String confirmPassword;
 

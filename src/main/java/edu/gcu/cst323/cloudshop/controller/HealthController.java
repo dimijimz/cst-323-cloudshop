@@ -18,10 +18,13 @@ import java.util.Map;
  *   <li>/actuator/health - readiness. Its status reflects database connectivity,
  *       but it reports the status alone and never the component detail.</li>
  * </ul>
+ *
+ * @author Dimitri Jimenez
  */
 @RestController
 public class HealthController {
 
+    /** The application's name, from {@code spring.application.name}, reported in every response. */
     @Value("${spring.application.name:cloudshop}")
     private String applicationName;
 

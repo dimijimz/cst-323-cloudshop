@@ -20,13 +20,17 @@ import java.util.List;
  * inventory methods return everything. Every change is logged at INFO to stdout,
  * which is what the cloud platforms' log collectors read; entry, exit and
  * exceptions are logged for it by {@code LoggingAspect}.
+ *
+ * @author Dimitri Jimenez
  */
 @Service
 @Transactional(readOnly = true)
 public class ProductService {
 
+    /** Writes the INFO business events: product created, updated, deactivated, reactivated, price changed. */
     private static final Logger log = LoggerFactory.getLogger(ProductService.class);
 
+    /** Data access for products. */
     private final ProductRepository productRepository;
 
     /**
@@ -150,6 +154,14 @@ public class ProductService {
         return setActive(id, true);
     }
 
+    /**
+     * Shows or hides a product in the public catalog, and logs which.
+     *
+     * @param id     the product to change
+     * @param active true to offer it in the catalog again, false to take it out
+     * @return the changed product
+     * @throws ResourceNotFoundException if the product does not exist
+     */
     private Product setActive(Long id, boolean active) {
         Product product = findById(id);
         product.setActive(active);

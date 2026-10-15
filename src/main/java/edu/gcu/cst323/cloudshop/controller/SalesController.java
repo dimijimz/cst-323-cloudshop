@@ -16,12 +16,17 @@ import java.util.List;
 /**
  * The owner's sales report: every purchase in the shop, with optional filters
  * and a revenue total. Limited to the OWNER role by {@code SecurityConfig}.
+ *
+ * @author Dimitri Jimenez
  */
 @Controller
 @RequestMapping("/owner/sales")
 public class SalesController {
 
+    /** Finds the purchases that match the filters and totals their revenue. */
     private final PurchaseService purchaseService;
+
+    /** Supplies every product, for the report's product filter. */
     private final ProductService productService;
 
     /**
@@ -54,6 +59,8 @@ public class SalesController {
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                         Model model) {
+        // A From date after the To date can match nothing, so the query is skipped
+        // and the page explains why the report is empty.
         boolean invalidRange = from != null && to != null && from.isAfter(to);
         List<Purchase> sales = invalidRange ? List.of() : purchaseService.findSales(productId, from, to);
 

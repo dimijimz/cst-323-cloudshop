@@ -7,18 +7,24 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.core.env.Environment;
 
 /**
- * Entry point for CloudShop, the CST-323 Milestone 3 application.
+ * Entry point for CloudShop, the CST-323 Cloud Computing application.
  *
  * <p>CloudShop is a small online shop with two roles. Buyers register, browse the
  * catalog and purchase products; the single shop owner manages inventory and
  * reviews sales. Every environment-specific value (database host, credentials,
  * HTTP port, owner account) is supplied externally rather than baked into the
  * jar, so the same build runs unchanged on each cloud platform.
+ *
+ * @author Dimitri Jimenez
  */
 @SpringBootApplication
 public class CloudShopApplication {
 
+    /** Writes the start-up line that says which port and database the application uses. */
     private static final Logger log = LoggerFactory.getLogger(CloudShopApplication.class);
+
+    /** What separates a URL's scheme from its authority, the host and anything written before it. */
+    private static final String AUTHORITY_MARKER = "//";
 
     /**
      * Starts the embedded web server and the Spring application context.
@@ -56,9 +62,9 @@ public class CloudShopApplication {
         // Credentials before the host come first, because a password may itself
         // contain a ';'. They end at the last '@' of the authority, and the
         // authority ends at the first '/', '?' or '#'.
-        int authorityStart = address.indexOf("//");
+        int authorityStart = address.indexOf(AUTHORITY_MARKER);
         if (authorityStart >= 0) {
-            int from = authorityStart + 2;
+            int from = authorityStart + AUTHORITY_MARKER.length();
             int authorityEnd = address.length();
             for (char end : new char[] {'/', '?', '#'}) {
                 int at = address.indexOf(end, from);

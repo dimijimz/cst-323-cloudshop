@@ -5,10 +5,15 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
-/** Serves the public landing page. */
+/**
+ * Serves the public landing page.
+ *
+ * @author Dimitri Jimenez
+ */
 @Controller
 public class HomeController {
 
+    /** Counts the products in the catalog, for the line on the home page. */
     private final ProductService productService;
 
     /**

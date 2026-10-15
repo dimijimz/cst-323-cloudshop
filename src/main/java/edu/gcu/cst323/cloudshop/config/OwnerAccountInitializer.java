@@ -21,15 +21,25 @@ import org.springframework.stereotype.Component;
  * built the schema. It only ever creates: once an owner exists, later changes to
  * the variables are ignored, so a redeploy can never reset the owner's password
  * or add a second owner.
+ *
+ * @author Dimitri Jimenez
  */
 @Component
 public class OwnerAccountInitializer implements ApplicationRunner {
 
+    /** Says at startup whether the owner account was created, already existed or could not be. */
     private static final Logger log = LoggerFactory.getLogger(OwnerAccountInitializer.class);
 
+    /** Checks for an existing owner and creates the account, hashing its password. */
     private final UserService userService;
+
+    /** The owner's sign-in name, from OWNER_USERNAME; empty when that is not set. */
     private final String ownerUsername;
+
+    /** The owner's password in plain text, from OWNER_PASSWORD; empty when unset, and never logged. */
     private final String ownerPassword;
+
+    /** The owner's email address, from OWNER_EMAIL or its built-in default. */
     private final String ownerEmail;
 
     /**

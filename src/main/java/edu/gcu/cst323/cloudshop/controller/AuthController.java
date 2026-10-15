@@ -21,12 +21,16 @@ import org.springframework.web.bind.annotation.PostMapping;
  * <p>This controller only renders the login form. Checking the submitted
  * username and password is done by Spring Security, which handles the form's
  * POST to /login itself, before any controller is reached.
+ *
+ * @author Dimitri Jimenez
  */
 @Controller
 public class AuthController {
 
+    /** Records each rejected sign-up form, naming the fields at fault but never what was typed. */
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
+    /** Creates buyer accounts and checks whether a name or address is already taken. */
     private final UserService userService;
 
     /**
@@ -96,6 +100,14 @@ public class AuthController {
         return "redirect:/login?registered";
     }
 
+    /**
+     * Adds a field error when the password and its confirmation differ. It is
+     * skipped when either field already has an error, so that each field shows
+     * one message at a time.
+     *
+     * @param form    the submitted form
+     * @param binding the validation result the error is added to
+     */
     private void rejectMismatchedPasswords(RegistrationForm form, BindingResult binding) {
         if (binding.hasFieldErrors("password") || binding.hasFieldErrors("confirmPassword")) {
             return;
@@ -105,6 +117,15 @@ public class AuthController {
         }
     }
 
+    /**
+     * Adds a field error for a username or email address that another account
+     * already uses, so the form says so instead of the insert failing on the
+     * database's unique constraint. A field that already has an error is not
+     * looked up.
+     *
+     * @param form    the submitted form
+     * @param binding the validation result the errors are added to
+     */
     private void rejectDuplicates(RegistrationForm form, BindingResult binding) {
         if (!binding.hasFieldErrors("username") && userService.usernameTaken(form.getUsername())) {
             binding.rejectValue("username", "username.taken", "That username is already taken");

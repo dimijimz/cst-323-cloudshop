@@ -34,10 +34,13 @@ import org.springframework.web.servlet.support.RequestContextUtils;
  * <p>Errors Spring already knows how to answer, such as a 404 for an unknown
  * address, are left to Spring Boot's error handling, which renders the same
  * {@code error.html} template with the matching status.
+ *
+ * @author Dimitri Jimenez
  */
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
+    /** Writes the HANDLED line for each exception this class answers. */
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /**
@@ -127,11 +130,28 @@ public class GlobalExceptionHandler {
                 "Something went wrong on our side. Please try again in a moment.");
     }
 
+    /**
+     * Builds the opening of the log line for an exception this class answered, for
+     * example {@code HANDLED 404 GET /products/{id}}. The route is the pattern that
+     * matched the request, never the address as it was typed.
+     *
+     * @param status  the status of the response being sent
+     * @param request the request that failed
+     * @return "HANDLED", the status, the method and the route pattern, with
+     *         "(no route)" in place of the pattern when no handler had been chosen
+     */
     private static String handled(HttpStatus status, HttpServletRequest request) {
         Object route = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
         return "HANDLED " + status.value() + " " + request.getMethod() + " " + (route == null ? "(no route)" : route);
     }
 
+    /**
+     * Builds the error page with its status and a message fit to show the visitor.
+     *
+     * @param status  the HTTP status of the response
+     * @param message what the page tells the visitor
+     * @return the {@code error} view carrying the status, its reason phrase and the message
+     */
     private static ModelAndView errorPage(HttpStatus status, String message) {
         ModelAndView view = new ModelAndView("error");
         view.setStatus(status);

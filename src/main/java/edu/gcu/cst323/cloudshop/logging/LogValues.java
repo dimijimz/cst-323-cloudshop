@@ -29,11 +29,15 @@ import java.util.regex.Pattern;
  * field added to a form later is safe the day it is added.
  *
  * <p>Results are never printed, only typed, with the size added for collections.
+ *
+ * @author Dimitri Jimenez
  */
 public final class LogValues {
 
+    /** A line break with the spaces around it; an entry in this log is kept to one line. */
     private static final Pattern LINE_BREAKS = Pattern.compile("\\s*\\R\\s*");
 
+    /** Not instantiated: every method is static. */
     private LogValues() {
     }
 
@@ -117,6 +121,14 @@ public final class LogValues {
         return fields.isEmpty() ? summary : summary + " on " + fields;
     }
 
+    /**
+     * Picks what may be logged of an exception's message. A binding, conversion or
+     * constraint failure is summarised, because Spring's own message for it repeats
+     * the rejected value; any other message is kept, on one line.
+     *
+     * @param ex the exception
+     * @return a one-line message that is safe to log, or "(no message)" when there is none
+     */
     private static String message(Throwable ex) {
         if (ex instanceof Errors errors) {
             return fieldErrors(errors);
@@ -146,6 +158,14 @@ public final class LogValues {
         return LINE_BREAKS.matcher(message).replaceAll(" ").strip();
     }
 
+    /**
+     * Names a value by its type, adding the size of a collection, map or array.
+     *
+     * @param declaredType the declared type of the parameter or return value; may be null
+     * @param value        the value itself; not null
+     * @return the type in angle brackets, for example {@code <ProductForm>} or
+     *         {@code <List size=3>}
+     */
     private static String type(Class<?> declaredType, Object value) {
         // A value declared as some other type is named by that type even when it
         // happens to be a map underneath: a Model is a Model, not a Map of size 0.
@@ -180,6 +200,9 @@ public final class LogValues {
     /**
      * True when the declared type either is one of the JDK's container types, whose
      * size is worth reporting, or tells the reader nothing.
+     *
+     * @param declaredType the declared type; may be null
+     * @return true for null, Object, Optional, an array, an Iterable or a Map
      */
     private static boolean isContainerOrUnknown(Class<?> declaredType) {
         return declaredType == null
@@ -193,16 +216,31 @@ public final class LogValues {
     /**
      * An unloaded lazy collection would run a query to answer size(), so asking
      * would let the log change what the application does. Its size is left out.
+     *
+     * @param value the collection or map
+     * @return false for a lazy collection that has not been fetched yet
      */
     private static boolean isLoaded(Object value) {
         return Persistence.getPersistenceUtil().isLoaded(value);
     }
 
+    /**
+     * Tells a JDK number or date apart from an application class that extends one,
+     * whose {@code toString} could print anything.
+     *
+     * @param value the value
+     * @return true if its class is in a {@code java.} package
+     */
     private static boolean isJdkType(Object value) {
         return value.getClass().getName().startsWith("java.");
     }
 
-    /** Steps past generated subclasses (CGLIB, Hibernate) to the class a developer wrote. */
+    /**
+     * Steps past generated subclasses (CGLIB, Hibernate) to the class a developer wrote.
+     *
+     * @param type the runtime class of a value
+     * @return the nearest class in its hierarchy that was not generated
+     */
     private static Class<?> userClass(Class<?> type) {
         Class<?> current = type;
         while (isGenerated(current) && current.getSuperclass() != null && current.getSuperclass() != Object.class) {
@@ -211,10 +249,23 @@ public final class LogValues {
         return current;
     }
 
+    /**
+     * Recognises a class generated at runtime by CGLIB or Hibernate.
+     *
+     * @param type the class
+     * @return true if its name carries the marker such a generated class has
+     */
     private static boolean isGenerated(Class<?> type) {
         return type.getName().contains("$$") || type.getName().contains("$HibernateProxy$");
     }
 
+    /**
+     * Names a class without its package, including an anonymous class, which has
+     * no simple name of its own.
+     *
+     * @param type the class
+     * @return its simple name, or for an anonymous class its binary name without the package
+     */
     private static String simpleName(Class<?> type) {
         String name = type.getSimpleName();
         if (!name.isEmpty()) {

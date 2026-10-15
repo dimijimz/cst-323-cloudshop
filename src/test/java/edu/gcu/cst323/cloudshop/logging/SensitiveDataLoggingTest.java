@@ -1,7 +1,6 @@
 package edu.gcu.cst323.cloudshop.logging;
 
 import ch.qos.logback.classic.Level;
-import edu.gcu.cst323.cloudshop.exception.ResourceNotFoundException;
 import edu.gcu.cst323.cloudshop.model.Product;
 import edu.gcu.cst323.cloudshop.model.User;
 import edu.gcu.cst323.cloudshop.repository.ProductRepository;
@@ -134,9 +133,8 @@ class SensitiveDataLoggingTest {
         mockMvc.perform(get("/my-purchases").with(buyer())).andExpect(status().isOk());
         mockMvc.perform(get("/owner/sales").with(user(OWNER_USERNAME).roles("OWNER")))
                 .andExpect(content().string(containsString(USERNAME)));
-        assertThat(userService.findByUsername(USERNAME).getEmail()).isEqualTo(EMAIL);
-        assertThatThrownBy(() -> userService.findByUsername(UNKNOWN_USERNAME))
-                .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(userRepository.findByUsernameIgnoreCase(USERNAME).orElseThrow().getEmail()).isEqualTo(EMAIL);
+        mockMvc.perform(formLogin("/login").user(UNKNOWN_USERNAME).password(PASSWORD)).andExpect(unauthenticated());
 
         String logged = log.everything();
         String console = output.getOut() + output.getErr();
@@ -158,8 +156,7 @@ class SensitiveDataLoggingTest {
                 "ERROR UserService - EXCEPTION UserService.createOwner [ERR-UNEXPECTED] "
                         + "IllegalStateException: An owner account already exists; the shop has exactly one",
                 "DEBUG PurchaseService - ENTER PurchaseService.findForBuyer(username=<String>)",
-                "WARN UserService - EXCEPTION UserService.findByUsername [ERR-NOTFOUND] "
-                        + "ResourceNotFoundException: No account has that username");
+                "DEBUG UserRepository - ENTER UserRepository.findByUsernameIgnoreCase(username=<String>)");
         assertThat(log.eventsWithStackTrace()).hasSize(1);
         assertThat(console)
                 .contains("ENTER UserService.createOwner(username=<String>, email=<String>, rawPassword=<String>)")

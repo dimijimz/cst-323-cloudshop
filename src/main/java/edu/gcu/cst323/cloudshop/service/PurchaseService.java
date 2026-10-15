@@ -21,15 +21,23 @@ import java.util.List;
 /**
  * Business layer for buying: the purchase transaction itself, a buyer's own
  * history, and the owner's sales report.
+ *
+ * @author Dimitri Jimenez
  */
 @Service
 @Transactional(readOnly = true)
 public class PurchaseService {
 
+    /** Writes the INFO line for each completed purchase, by id. */
     private static final Logger log = LoggerFactory.getLogger(PurchaseService.class);
 
+    /** Stores purchase records and runs the history and sales queries. */
     private final PurchaseRepository purchaseRepository;
+
+    /** Takes the stock and reads the product as the purchase left it. */
     private final ProductRepository productRepository;
+
+    /** Resolves the signed-in buyer's account. */
     private final UserRepository userRepository;
 
     /**
@@ -72,6 +80,10 @@ public class PurchaseService {
             throw new IllegalArgumentException("Quantity must be at least 1");
         }
 
+        // One conditional UPDATE both checks and takes the stock, so two buyers cannot
+        // both get the last unit. It changes no row if too few units are left, if the
+        // product is inactive or if it does not exist; which of those happened is
+        // worked out below.
         int rowsUpdated = productRepository.decrementStock(productId, quantity);
 
         // Loaded after the update, so this is the row as the update left it.

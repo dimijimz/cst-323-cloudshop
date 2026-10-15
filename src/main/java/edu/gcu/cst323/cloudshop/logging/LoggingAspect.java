@@ -33,12 +33,15 @@ import java.util.concurrent.TimeUnit;
  * <p>The order puts this advice outside the transaction advice on a service. A
  * service's EXIT line and its time therefore include the commit, and a failure at
  * commit is reported against the method that owned the transaction.
+ *
+ * @author Dimitri Jimenez
  */
 @Aspect
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 100)
 public class LoggingAspect {
 
+    /** The application's base package; an interface from it stands in for a repository's proxy class. */
     private static final String APPLICATION_PACKAGE = "edu.gcu.cst323.cloudshop";
 
     /** Any method declared by a class in the controller package. */
@@ -110,6 +113,10 @@ public class LoggingAspect {
      * <p>For a controller or service that is the class itself. A repository bean
      * has no class of its own in this application, only a generated proxy, so the
      * repository interface it implements stands in for it.
+     *
+     * @param joinPoint the intercepted call
+     * @return the class, or for a repository the interface, whose logger and simple
+     *         name the lines use
      */
     private static Class<?> interceptedType(ProceedingJoinPoint joinPoint) {
         Object target = joinPoint.getTarget();
@@ -128,6 +135,13 @@ public class LoggingAspect {
         return joinPoint.getSignature().getDeclaringType();
     }
 
+    /**
+     * Lists a call's arguments as {@code name=value} pairs, each value reduced by
+     * {@link LogValues#argument} to what the log may say about it.
+     *
+     * @param joinPoint the intercepted call
+     * @return the pairs separated by commas, or an empty string for a call without arguments
+     */
     private static String describeArguments(ProceedingJoinPoint joinPoint) {
         Object[] values = joinPoint.getArgs();
         if (values.length == 0) {
@@ -148,6 +162,13 @@ public class LoggingAspect {
         return described.toString();
     }
 
+    /**
+     * Describes what a call returned, by its type only.
+     *
+     * @param joinPoint the intercepted call, which supplies the declared return type
+     * @param result    the value the call returned
+     * @return the description {@link LogValues#result} gives
+     */
     private static String describeResult(ProceedingJoinPoint joinPoint, Object result) {
         return LogValues.result(((MethodSignature) joinPoint.getSignature()).getReturnType(), result);
     }

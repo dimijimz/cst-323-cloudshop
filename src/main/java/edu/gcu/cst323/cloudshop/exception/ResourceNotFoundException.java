@@ -5,6 +5,8 @@ package edu.gcu.cst323.cloudshop.exception;
  * id that does not exist or a product that has been deactivated.
  *
  * <p>{@link GlobalExceptionHandler} turns it into a 404 page.
+ *
+ * @author Dimitri Jimenez
  */
 public class ResourceNotFoundException extends RuntimeException {
 

@@ -18,6 +18,8 @@ import java.util.WeakHashMap;
  *
  * <p>Both {@link LoggingAspect} and {@code GlobalExceptionHandler} log through
  * here, which is what keeps their codes and wording the same.
+ *
+ * @author Dimitri Jimenez
  */
 public final class ExceptionLog {
 
@@ -31,6 +33,7 @@ public final class ExceptionLog {
      */
     private static final Map<Throwable, Boolean> TRACED = Collections.synchronizedMap(new WeakHashMap<>());
 
+    /** Not instantiated: every method is static. */
     private ExceptionLog() {
     }
 
@@ -64,6 +67,10 @@ public final class ExceptionLog {
      * Records that this exception's stack trace is about to be written, unless it
      * already has been. An exception that wraps one already written counts as
      * written too: the frames that matter are the cause's, and they are in the log.
+     *
+     * @param ex the exception about to be logged
+     * @return true if neither it nor any exception in its cause chain has had its
+     *         stack trace written yet
      */
     private static boolean firstSighting(Throwable ex) {
         Throwable current = ex;

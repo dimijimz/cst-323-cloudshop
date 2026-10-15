@@ -22,11 +22,15 @@ import org.springframework.core.env.ConfigurableEnvironment;
  *
  * <p>The "h2" profile satisfies this check without an environment variable, because
  * application-h2.properties sets the password to an explicit empty value.
+ *
+ * @author Dimitri Jimenez
  */
 public class RequiredDatabasePasswordValidator implements EnvironmentPostProcessor, Ordered {
 
+    /** The property that DB_PASSWORD reaches through application.properties. */
     private static final String PROPERTY = "spring.datasource.password";
 
+    /** Why startup stopped and how to fix it, written for whoever is deploying the application. */
     private static final String MESSAGE =
             "DB_PASSWORD is not set. This application has no default database password by design: "
             + "a committed fallback would let a misconfigured deployment start and then fail with an "
